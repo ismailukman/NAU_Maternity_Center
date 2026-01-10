@@ -1,0 +1,5 @@
+# macOS
+.DS_Store
+
+# Planning and documentation folders (not for production)
+maternity_center_plan/
