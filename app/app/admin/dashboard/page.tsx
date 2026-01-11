@@ -1373,6 +1373,33 @@ export default function AdminDashboard() {
     try {
       const appointmentSnap = await getDoc(doc(db, 'appointments', appointmentId))
       const appointmentData = appointmentSnap.exists() ? appointmentSnap.data() : null
+      const doctorId = String(appointmentData?.doctorId || '').trim()
+      const appointmentDate = toDateKey(appointmentData?.appointmentDate)
+      const appointmentTime = String(appointmentData?.appointmentTime || appointmentData?.timeSlot || '').trim()
+
+      if (!doctorId || !appointmentDate || !appointmentTime) {
+        toast.error('Appointment is missing doctor, date, or time.')
+        return
+      }
+
+      const doctorAppointmentsSnap = await getDocs(
+        query(collection(db, 'appointments'), where('doctorId', '==', doctorId))
+      )
+
+      const hasConflict = doctorAppointmentsSnap.docs.some((docSnapshot) => {
+        if (docSnapshot.id === appointmentId) return false
+        const data = docSnapshot.data()
+        const dateKey = toDateKey(data.appointmentDate)
+        const time = String(data.appointmentTime || data.timeSlot || '').trim()
+        const checkedIn = Boolean(data.checkedIn) || String(data.status || '').toUpperCase() === 'CHECKED_IN'
+        return checkedIn && dateKey === appointmentDate && time === appointmentTime
+      })
+
+      if (hasConflict) {
+        toast.error('Another patient is already checked in with this doctor at the same time.')
+        return
+      }
+
       const patientFirst = String(
         appointmentData?.patientFirstName || appointmentData?.patient?.firstName || ''
       ).trim()
