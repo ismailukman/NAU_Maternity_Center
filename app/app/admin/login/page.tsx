@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import Image from 'next/image'
 import { auth, db } from '@/lib/firebase-config'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { FirebaseError } from 'firebase/app'
 
 const getAuthErrorMessage = (error: unknown) => {
@@ -56,16 +56,7 @@ export default function AdminLoginPage() {
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password)
       const adminDoc = await getDoc(doc(db, 'admins', credential.user.uid))
-      let adminData = adminDoc.exists() ? adminDoc.data() : null
-
-      if (!adminData) {
-        const adminQuery = query(
-          collection(db, 'admins'),
-          where('email', '==', email)
-        )
-        const adminSnapshot = await getDocs(adminQuery)
-        adminData = adminSnapshot.docs[0]?.data() ?? null
-      }
+      const adminData = adminDoc.exists() ? adminDoc.data() : null
 
       if (!adminData) {
         await signOut(auth)

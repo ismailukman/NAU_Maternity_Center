@@ -198,16 +198,7 @@ export default function AdminDashboard() {
 
       try {
         const adminDoc = await getDoc(doc(db, 'admins', user.uid))
-        let adminData = adminDoc.exists() ? adminDoc.data() : null
-
-        if (!adminData && user.email) {
-          const adminQuery = query(
-            collection(db, 'admins'),
-            where('email', '==', user.email)
-          )
-          const adminSnapshot = await getDocs(adminQuery)
-          adminData = adminSnapshot.docs[0]?.data() ?? null
-        }
+        const adminData = adminDoc.exists() ? adminDoc.data() : null
 
         if (!adminData) {
           await signOut(auth)
