@@ -113,6 +113,12 @@ export default function Footer() {
             >
               Admin Portal
             </Link>
+            <Link
+              href="/doctor/login"
+              className="inline-flex items-center justify-center rounded-full border border-maternal-primary/60 px-4 py-2 text-xs sm:text-sm font-semibold text-maternal-primary hover:bg-maternal-primary hover:text-white transition-colors"
+            >
+              Doctor Portal
+            </Link>
           </div>
           <p>&copy; {new Date().getFullYear()} Natasha Akpoti-Uduaghan Maternity Centre. All rights reserved.</p>
           <p className="mt-2">
