@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { MapPin, Phone, Mail, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useState } from 'react'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { db } from '@/lib/firebase-config'
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -18,13 +20,32 @@ export default function ContactPage() {
     subject: '',
     message: '',
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    toast.success('Message sent successfully!', {
-      description: 'We will get back to you within 24 hours.',
-    })
-    setFormData({ name: '', email: '', phone: '', subject: '', message: '' })
+    if (isSubmitting) return
+
+    try {
+      setIsSubmitting(true)
+      await addDoc(collection(db, 'contactMessages'), {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        subject: formData.subject.trim(),
+        message: formData.message.trim(),
+        createdAt: serverTimestamp(),
+        source: 'contact-page',
+      })
+      toast.success('Message sent successfully!', {
+        description: 'We will get back to you within 24 hours.',
+      })
+      setFormData({ name: '', email: '', phone: '', subject: '', message: '' })
+    } catch (error) {
+      toast.error('Unable to send message. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -192,7 +213,7 @@ export default function ContactPage() {
                         />
                       </div>
 
-                      <Button type="submit" size="lg" className="w-full maternal-gradient">
+                      <Button type="submit" size="lg" className="w-full maternal-gradient" disabled={isSubmitting}>
                         Send Message
                       </Button>
                     </form>
