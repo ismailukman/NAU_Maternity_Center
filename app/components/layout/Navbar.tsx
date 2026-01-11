@@ -95,15 +95,6 @@ export default function Navbar() {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center space-x-3">
-            <Link href="/doctor/login">
-              <Button
-                variant="ghost"
-                className="group relative overflow-hidden hover:bg-maternal-lighter hover:text-maternal-primary transition-all duration-300"
-              >
-                <Stethoscope className="mr-2 h-4 w-4 group-hover:rotate-12 transition-transform duration-300" />
-                <span>Doctor Portal</span>
-              </Button>
-            </Link>
             <Link href="/login">
               <Button
                 variant="ghost"
@@ -165,15 +156,6 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="flex flex-col space-y-2 pt-4">
-              <Link href="/doctor/login" onClick={() => setIsMenuOpen(false)}>
-                <Button
-                  variant="outline"
-                  className="w-full group hover:bg-maternal-lighter hover:border-maternal-primary transition-all duration-300"
-                >
-                  <Stethoscope className="mr-2 h-4 w-4 group-hover:rotate-12 transition-transform duration-300" />
-                  Doctor Portal
-                </Button>
-              </Link>
               <Link href="/login" onClick={() => setIsMenuOpen(false)}>
                 <Button
                   variant="outline"

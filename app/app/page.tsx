@@ -324,7 +324,7 @@ export default function HomePage() {
                 </p>
                 <div className="flex flex-wrap gap-4 pt-4">
                   <Link href="/appointments/book">
-                    <Button size="lg" className="maternal-gradient text-lg px-10 py-6 shadow-xl hover:shadow-2xl transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 group">
+                    <Button size="lg" className="bg-gradient-to-r from-cyan-500 to-emerald-500 text-white text-lg px-10 py-6 shadow-xl hover:shadow-2xl transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 group">
                       <Calendar className="mr-2 h-5 w-5 group-hover:rotate-12 transition-transform" />
                       Book Appointment
                       <Sparkles className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
