@@ -50,6 +50,7 @@ import {
   updateDoc,
   where,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore'
 import {
   Dialog,
@@ -85,21 +86,28 @@ interface Appointment {
   checkedIn: boolean
   checkInTime: string | null
   queueNumber: string | null
+  patientId?: string
   patient: {
     user: {
       firstName: string
       lastName: string
       email: string
       phone: string
+      gender?: string
     }
   }
+  doctorId?: string
   doctor: {
     user: {
       firstName: string
       lastName: string
+      gender?: string
     }
   }
   checkedOutTime?: string | null
+  reasonForVisit?: string
+  symptoms?: string
+  timeWithDoctor?: string
 }
 
 interface Stats {
@@ -152,6 +160,7 @@ interface DoctorProfile {
   phone: string
   availability?: string[]
   bookedSlots?: string[]
+  gender?: string
 }
 
 interface PatientProfile {
@@ -160,6 +169,9 @@ interface PatientProfile {
   lastName: string
   email: string
   phone: string
+  gender?: string
+  dateOfBirth?: string
+  address?: string
 }
 
 const stripDoctorPrefix = (name: string) =>
@@ -326,6 +338,19 @@ export default function AdminDashboard() {
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [editStatus, setEditStatus] = useState('')
+  const [editAvailableTimes, setEditAvailableTimes] = useState<string[]>([])
+  const [editSpecialties, setEditSpecialties] = useState<string[]>([])
+  const [editAppointmentForm, setEditAppointmentForm] = useState({
+    appointmentId: '',
+    patientId: '',
+    doctorId: '',
+    appointmentDate: '',
+    appointmentTime: '',
+    appointmentType: '',
+    reasonForVisit: '',
+    symptoms: '',
+    status: '',
+  })
   const [activeTab, setActiveTab] = useState('appointments')
   const [now, setNow] = useState<number>(() => Date.now())
   const [showDoctorDialog, setShowDoctorDialog] = useState(false)
@@ -347,12 +372,16 @@ export default function AdminDashboard() {
     bio: '',
     email: '',
     phone: '',
+    gender: '',
   })
   const [patientForm, setPatientForm] = useState({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
+    gender: '',
+    dateOfBirth: '',
+    address: '',
   })
   const [appointmentForm, setAppointmentForm] = useState({
     patientType: 'existing',
@@ -446,20 +475,27 @@ export default function AdminDashboard() {
           checkInTime: data.checkInTime ? normalizeDateValue(data.checkInTime) : null,
           checkedOutTime: data.checkedOutTime ? normalizeDateValue(data.checkedOutTime) : null,
           queueNumber: data.queueNumber || null,
+          patientId: data.patientId || '',
           patient: {
             user: {
               firstName: data.patientFirstName || patientParts.firstName,
               lastName: data.patientLastName || patientParts.lastName,
               email: data.patientEmail || '',
               phone: data.patientPhone || '',
+              gender: data.patientGender || '',
             },
           },
+          doctorId: data.doctorId || '',
           doctor: {
             user: {
               firstName: data.doctorFirstName || doctorParts.firstName,
               lastName: data.doctorLastName || doctorParts.lastName,
+              gender: data.doctorGender || '',
             },
           },
+          reasonForVisit: data.reasonForVisit || '',
+          symptoms: data.symptoms || '',
+          timeWithDoctor: data.timeWithDoctor || '',
         } as Appointment
       })
       setLiveAppointments(mapped)
@@ -526,6 +562,71 @@ export default function AdminDashboard() {
 
     loadAvailability()
   }, [appointmentForm.appointmentDate, appointmentForm.doctorId, showAppointmentDialog])
+
+  useEffect(() => {
+    const loadEditAvailability = async () => {
+      if (!showEditDialog) return
+      if (!editAppointmentForm.doctorId || !editAppointmentForm.appointmentDate) {
+        setEditAvailableTimes([])
+        return
+      }
+
+      try {
+        const doctorDoc = await getDoc(doc(db, 'doctors', editAppointmentForm.doctorId))
+        const doctorData = doctorDoc.exists() ? doctorDoc.data() : {}
+        const workingHours = String(doctorData?.workingHours || '09:00 AM - 05:00 PM')
+        const consultationDuration = Number(doctorData?.consultationDuration || 30)
+        const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
+        const bookedSlots = Array.isArray(doctorData?.bookedSlots) ? doctorData.bookedSlots : []
+
+        const appointmentDay = new Date(editAppointmentForm.appointmentDate).toLocaleDateString('en-US', { weekday: 'long' })
+        if (
+          availability.length > 0 &&
+          !availability.some((day: string) => day.toLowerCase() === appointmentDay.toLowerCase())
+        ) {
+          setEditAvailableTimes([])
+          return
+        }
+
+        const allSlots = buildTimeSlots(workingHours, consultationDuration)
+        const datePrefix = `${editAppointmentForm.appointmentDate}|`
+        const blocked = new Set(
+          bookedSlots
+            .filter((slot: string) => slot.startsWith(datePrefix))
+            .map((slot: string) => slot.slice(datePrefix.length))
+        )
+
+        const appointmentsSnapshot = await getDocs(
+          query(
+            collection(db, 'appointments'),
+            where('appointmentDate', '==', editAppointmentForm.appointmentDate),
+            where('doctorId', '==', editAppointmentForm.doctorId)
+          )
+        )
+        appointmentsSnapshot.docs.forEach((docSnapshot) => {
+          if (docSnapshot.id === editAppointmentForm.appointmentId) return
+          const data = docSnapshot.data()
+          const time = String(data.appointmentTime || data.timeSlot || '').trim()
+          if (time) blocked.add(time)
+        })
+
+        const available = allSlots.filter((slot) =>
+          slot === editAppointmentForm.appointmentTime || !blocked.has(slot)
+        )
+        const sorted = available.sort((a, b) => {
+          const aMinutes = parseTimeToMinutes(a) ?? 0
+          const bMinutes = parseTimeToMinutes(b) ?? 0
+          return aMinutes - bMinutes
+        })
+        setEditAvailableTimes(sorted)
+      } catch (error) {
+        console.error('Failed to load edit availability:', error)
+        setEditAvailableTimes([])
+      }
+    }
+
+    loadEditAvailability()
+  }, [editAppointmentForm.appointmentDate, editAppointmentForm.doctorId, editAppointmentForm.appointmentId, showEditDialog])
 
   useEffect(() => {
     if (!admin) return
@@ -630,20 +731,27 @@ export default function AdminDashboard() {
             checkInTime: data.checkInTime ? normalizeDateValue(data.checkInTime) : null,
             checkedOutTime: data.checkedOutTime ? normalizeDateValue(data.checkedOutTime) : null,
             queueNumber: data.queueNumber || null,
+            patientId: data.patientId || '',
             patient: {
               user: {
                 firstName: data.patientFirstName || patientParts.firstName,
                 lastName: data.patientLastName || patientParts.lastName,
                 email: data.patientEmail || data.patient?.email || '',
                 phone: data.patientPhone || data.patient?.phone || '',
+                gender: data.patientGender || data.patient?.gender || '',
               },
             },
+            doctorId: data.doctorId || '',
             doctor: {
               user: {
                 firstName: data.doctorFirstName || doctorParts.firstName,
                 lastName: data.doctorLastName || doctorParts.lastName,
+                gender: data.doctorGender || '',
               },
             },
+            reasonForVisit: data.reasonForVisit || '',
+            symptoms: data.symptoms || '',
+            timeWithDoctor: data.timeWithDoctor || '',
           } as Appointment
         })
       )
@@ -760,6 +868,7 @@ export default function AdminDashboard() {
           phone: data.phone || '',
           availability: Array.isArray(data.availability) ? data.availability : [],
           bookedSlots: Array.isArray(data.bookedSlots) ? data.bookedSlots : [],
+          gender: data.gender || '',
         } as DoctorProfile
       })
       setDoctors(mapped)
@@ -779,6 +888,9 @@ export default function AdminDashboard() {
           lastName: data.lastName || '',
           email: data.email || '',
           phone: data.phone || '',
+          gender: data.gender || '',
+          dateOfBirth: data.dateOfBirth || '',
+          address: data.address || '',
         } as PatientProfile
       })
       setPatients(mapped)
@@ -811,6 +923,47 @@ export default function AdminDashboard() {
     setShowAppointmentDialog(true)
   }
 
+  const openEditAppointment = (appointment: Appointment) => {
+    const doctorName = formatDoctorName(
+      `${appointment.doctor.user.firstName} ${appointment.doctor.user.lastName}`
+    )
+    const matchedDoctor = appointment.doctorId
+      ? doctors.find((doctor) => doctor.id === appointment.doctorId)
+      : doctors.find((doctor) => formatDoctorName(doctor.name) === doctorName)
+
+    const matchedPatient = appointment.patientId
+      ? patients.find((patient) => patient.id === appointment.patientId)
+      : patients.find((patient) => {
+          if (appointment.patient.user.email && patient.email) {
+            return appointment.patient.user.email === patient.email
+          }
+          if (appointment.patient.user.phone && patient.phone) {
+            return appointment.patient.user.phone === patient.phone
+          }
+          return false
+        })
+
+    const specialties = matchedDoctor?.specialties?.length
+      ? matchedDoctor.specialties
+      : parseSpecialties(matchedDoctor?.specialization || '')
+
+    setEditSpecialties(specialties)
+    setEditAppointmentForm({
+      appointmentId: appointment.id,
+      patientId: matchedPatient?.id || appointment.patientId || '',
+      doctorId: matchedDoctor?.id || appointment.doctorId || '',
+      appointmentDate: appointment.appointmentDate || '',
+      appointmentTime: appointment.appointmentTime || '',
+      appointmentType: appointment.appointmentType || specialties[0] || '',
+      reasonForVisit: appointment.reasonForVisit || '',
+      symptoms: appointment.symptoms || '',
+      status: appointment.status || 'SCHEDULED',
+    })
+    setEditStatus(appointment.status || 'SCHEDULED')
+    setSelectedAppointment(appointment)
+    setShowEditDialog(true)
+  }
+
   const openAddDoctor = () => {
     setEditingDoctor(null)
     setDoctorForm({
@@ -825,6 +978,7 @@ export default function AdminDashboard() {
       bio: '',
       email: '',
       phone: '',
+      gender: '',
     })
     setShowDoctorDialog(true)
   }
@@ -843,6 +997,7 @@ export default function AdminDashboard() {
       bio: doctor.bio,
       email: doctor.email,
       phone: doctor.phone,
+      gender: doctor.gender || '',
     })
     setShowDoctorDialog(true)
   }
@@ -863,6 +1018,7 @@ export default function AdminDashboard() {
         bio: doctorForm.bio.trim(),
         email: doctorForm.email.trim(),
         phone: doctorForm.phone.trim(),
+        gender: doctorForm.gender.trim(),
       }
 
       if (editingDoctor) {
@@ -899,6 +1055,9 @@ export default function AdminDashboard() {
       lastName: '',
       email: '',
       phone: '',
+      gender: '',
+      dateOfBirth: '',
+      address: '',
     })
     setShowPatientDialog(true)
   }
@@ -910,6 +1069,9 @@ export default function AdminDashboard() {
       lastName: patient.lastName,
       email: patient.email,
       phone: patient.phone,
+      gender: patient.gender || '',
+      dateOfBirth: patient.dateOfBirth || '',
+      address: patient.address || '',
     })
     setShowPatientDialog(true)
   }
@@ -921,6 +1083,9 @@ export default function AdminDashboard() {
         lastName: patientForm.lastName.trim(),
         email: patientForm.email.trim(),
         phone: patientForm.phone.trim(),
+        gender: patientForm.gender.trim(),
+        dateOfBirth: patientForm.dateOfBirth.trim(),
+        address: patientForm.address.trim(),
       }
 
       if (editingPatient) {
@@ -1203,16 +1368,146 @@ export default function AdminDashboard() {
 
   const handleUpdateAppointment = async () => {
     if (!selectedAppointment) return
+    const appointmentDate = editAppointmentForm.appointmentDate.trim()
+    const appointmentTime = editAppointmentForm.appointmentTime.trim()
+    if (!editAppointmentForm.doctorId) {
+      toast.error('Please select a doctor.')
+      return
+    }
+    if (!editAppointmentForm.patientId) {
+      toast.error('Please select a patient.')
+      return
+    }
+    if (!appointmentDate) {
+      toast.error('Please select a date.')
+      return
+    }
+    if (!appointmentTime) {
+      toast.error('Please select a time.')
+      return
+    }
+    if (!editAppointmentForm.reasonForVisit.trim()) {
+      toast.error('Please enter a reason for visit.')
+      return
+    }
+
+    const selectedDoctor = doctors.find((doctor) => doctor.id === editAppointmentForm.doctorId)
+    if (!selectedDoctor) {
+      toast.error('Selected doctor is not available.')
+      return
+    }
+    const selectedPatient = patients.find((patient) => patient.id === editAppointmentForm.patientId)
+    if (!selectedPatient) {
+      toast.error('Selected patient was not found.')
+      return
+    }
+
+    const timeInfo = parseTimeInput(appointmentTime)
+    if (!timeInfo) {
+      toast.error('Please use a valid time (e.g., 09:00 AM).')
+      return
+    }
 
     try {
+      const doctorDoc = await getDoc(doc(db, 'doctors', selectedDoctor.id))
+      const doctorData = doctorDoc.exists() ? doctorDoc.data() : {}
+      const workingHours = String(doctorData?.workingHours || selectedDoctor.workingHours || '09:00 AM - 05:00 PM')
+      const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
+      const workingRange = parseWorkingRange(workingHours)
+      if (!workingRange) {
+        toast.error('Doctor working hours are not configured.')
+        return
+      }
+
+      const appointmentDay = new Date(appointmentDate).toLocaleDateString('en-US', { weekday: 'long' })
+      if (
+        availability.length > 0 &&
+        !availability.some((day: string) => day.toLowerCase() === appointmentDay.toLowerCase())
+      ) {
+        toast.error(`Doctor is not available on ${appointmentDay}.`)
+        return
+      }
+
+      if (timeInfo.minutes < workingRange.start || timeInfo.minutes > workingRange.end) {
+        toast.error('Selected time is outside doctor working hours.')
+        return
+      }
+
+      const dateSnapshot = await getDocs(
+        query(
+          collection(db, 'appointments'),
+          where('appointmentDate', '==', appointmentDate),
+          where('doctorId', '==', selectedDoctor.id)
+        )
+      )
+
+      const timeConflicts = dateSnapshot.docs
+        .filter((docSnapshot) => docSnapshot.id !== selectedAppointment.id)
+        .map((docSnapshot) => docSnapshot.data())
+        .filter((appointment) => {
+          const time = String(appointment.appointmentTime || appointment.timeSlot || '').trim()
+          if (!time) return false
+          const minutes = parseTimeToMinutes(time)
+          if (minutes !== null) {
+            return minutes === timeInfo.minutes
+          }
+          return time === timeInfo.label
+        })
+
+      const doctorConflict = timeConflicts.some(
+        (appointment) => appointment.doctorId === selectedDoctor.id
+      )
+      if (doctorConflict) {
+        toast.error('This time slot is already booked for the selected doctor.')
+        return
+      }
+
+      const patientConflict = timeConflicts.some((appointment) => {
+        if (selectedPatient.id && appointment.patientId) {
+          return appointment.patientId === selectedPatient.id
+        }
+        if (selectedPatient.email && appointment.patientEmail) {
+          return appointment.patientEmail === selectedPatient.email
+        }
+        return selectedPatient.phone && appointment.patientPhone === selectedPatient.phone
+      })
+      if (patientConflict) {
+        toast.error('This patient already has an appointment at this time.')
+        return
+      }
+
+      const doctorNameParts = buildNameParts(selectedDoctor.name)
       const updates: Record<string, any> = {
+        appointmentType: editAppointmentForm.appointmentType.trim() || selectedDoctor.specialization || 'General Consultation',
+        appointmentDate,
+        appointmentTime: timeInfo.label,
         status: editStatus,
-        checkedIn: editStatus === 'CHECKED_IN' ? true : selectedAppointment.checkedIn,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        doctorFirstName: doctorNameParts.firstName,
+        doctorLastName: doctorNameParts.lastName,
+        patientId: selectedPatient.id,
+        patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim(),
+        patientFirstName: selectedPatient.firstName,
+        patientLastName: selectedPatient.lastName,
+        patientEmail: selectedPatient.email,
+        patientPhone: selectedPatient.phone,
+        reasonForVisit: editAppointmentForm.reasonForVisit.trim(),
+        symptoms: editAppointmentForm.symptoms.trim(),
+      }
+
+      if (editStatus === 'CHECKED_IN') {
+        updates.checkedIn = true
+        if (!selectedAppointment.checkInTime) {
+          updates.checkInTime = new Date().toISOString()
+        }
+      } else {
+        updates.checkedIn = false
       }
 
       if (editStatus === 'COMPLETED') {
-        const startTime = selectedAppointment.checkInTime
-          ? new Date(selectedAppointment.checkInTime).getTime()
+        const startTime = (selectedAppointment.checkInTime || updates.checkInTime)
+          ? new Date(selectedAppointment.checkInTime || updates.checkInTime).getTime()
           : null
         updates.checkedOutTime = new Date().toISOString()
         updates.checkedIn = false
@@ -1224,9 +1519,21 @@ export default function AdminDashboard() {
         updates.timeWithDoctor = '0H:00M:00s'
       }
 
-      await updateDoc(doc(db, 'appointments', selectedAppointment.id), {
-        ...updates,
-      })
+      const previousSlot = `${selectedAppointment.appointmentDate}|${selectedAppointment.appointmentTime}`
+      const nextSlot = `${appointmentDate}|${timeInfo.label}`
+      if (selectedAppointment.doctorId && (selectedAppointment.doctorId !== selectedDoctor.id || previousSlot !== nextSlot)) {
+        await updateDoc(doc(db, 'doctors', selectedAppointment.doctorId), {
+          bookedSlots: arrayRemove(previousSlot),
+        })
+      }
+
+      if (!selectedAppointment.doctorId || selectedAppointment.doctorId !== selectedDoctor.id || previousSlot !== nextSlot) {
+        await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
+          bookedSlots: arrayUnion(nextSlot),
+        })
+      }
+
+      await updateDoc(doc(db, 'appointments', selectedAppointment.id), updates)
 
       toast.success('Appointment updated successfully')
       setShowEditDialog(false)
@@ -1234,6 +1541,7 @@ export default function AdminDashboard() {
       fetchStats()
       fetchDoctorSchedules()
     } catch (error) {
+      console.error('Failed to update appointment:', error)
       toast.error('An error occurred')
     }
   }
@@ -1703,11 +2011,7 @@ export default function AdminDashboard() {
                                 size="sm"
                                 variant="outline"
                                 className="border-blue-300 text-blue-600 hover:bg-blue-50 px-2 sm:px-3"
-                                onClick={() => {
-                                  setSelectedAppointment(appointment)
-                                  setEditStatus(appointment.status)
-                                  setShowEditDialog(true)
-                                }}
+                                onClick={() => openEditAppointment(appointment)}
                               >
                                 <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
@@ -1870,6 +2174,11 @@ export default function AdminDashboard() {
                         <p className="text-xs text-gray-500">
                           ₦{doctor.fee.toLocaleString()} • {doctor.consultationDuration} min
                         </p>
+                        {(doctor.gender || doctor.languages.length > 0) && (
+                          <p className="text-xs text-gray-500">
+                            {[doctor.gender, doctor.languages.join(', ')].filter(Boolean).join(' • ')}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -1929,6 +2238,11 @@ export default function AdminDashboard() {
                         </p>
                         <p className="text-sm text-gray-600">{patient.phone}</p>
                         <p className="text-xs text-gray-500">{patient.email}</p>
+                        {(patient.gender || patient.dateOfBirth) && (
+                          <p className="text-xs text-gray-500">
+                            {[patient.gender, patient.dateOfBirth].filter(Boolean).join(' • ')}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -2053,6 +2367,22 @@ export default function AdminDashboard() {
                 </datalist>
               </div>
               <div>
+                <Label htmlFor="doctor-gender">Gender</Label>
+                <Select
+                  value={doctorForm.gender}
+                  onValueChange={(value) => setDoctorForm({ ...doctorForm, gender: value })}
+                >
+                  <SelectTrigger id="doctor-gender">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="doctor-email">Email</Label>
                 <Input
                   id="doctor-email"
@@ -2118,6 +2448,31 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
+                <Label htmlFor="patient-gender">Gender</Label>
+                <Select
+                  value={patientForm.gender}
+                  onValueChange={(value) => setPatientForm({ ...patientForm, gender: value })}
+                >
+                  <SelectTrigger id="patient-gender">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="patient-dob">Date of Birth</Label>
+                <Input
+                  id="patient-dob"
+                  type="date"
+                  value={patientForm.dateOfBirth}
+                  onChange={(e) => setPatientForm({ ...patientForm, dateOfBirth: e.target.value })}
+                />
+              </div>
+              <div>
                 <Label htmlFor="patient-email">Email</Label>
                 <Input
                   id="patient-email"
@@ -2132,6 +2487,15 @@ export default function AdminDashboard() {
                   id="patient-phone"
                   value={patientForm.phone}
                   onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="patient-address">Address</Label>
+                <Textarea
+                  id="patient-address"
+                  value={patientForm.address}
+                  onChange={(e) => setPatientForm({ ...patientForm, address: e.target.value })}
+                  placeholder="Home address"
                 />
               </div>
             </div>
@@ -2386,30 +2750,158 @@ export default function AdminDashboard() {
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Edit Appointment</DialogTitle>
             <DialogDescription>
-              Update the status of appointment {selectedAppointment?.appointmentNumber}
+              Update details for appointment {selectedAppointment?.appointmentNumber}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="status">Appointment Status</Label>
-              <Select value={editStatus} onValueChange={setEditStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SCHEDULED">Scheduled</SelectItem>
-                  <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                  <SelectItem value="CHECKED_IN">Checked In</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                  <SelectItem value="MISSED">Missed</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Patient</Label>
+                <Select
+                  value={editAppointmentForm.patientId}
+                  onValueChange={(value) =>
+                    setEditAppointmentForm((prev) => ({ ...prev, patientId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {patients.map((patient) => (
+                      <SelectItem key={patient.id} value={patient.id}>
+                        {patient.firstName} {patient.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Doctor</Label>
+                <Select
+                  value={editAppointmentForm.doctorId}
+                  onValueChange={(value) => {
+                    const doctor = doctors.find((item) => item.id === value)
+                    const specialties = doctor?.specialties?.length
+                      ? doctor.specialties
+                      : parseSpecialties(doctor?.specialization || '')
+                    setEditSpecialties(specialties)
+                    setEditAppointmentForm((prev) => ({
+                      ...prev,
+                      doctorId: value,
+                      appointmentType: specialties[0] || prev.appointmentType,
+                      appointmentTime: '',
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select doctor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((doctor) => (
+                      <SelectItem key={doctor.id} value={doctor.id}>
+                        {formatDoctorName(doctor.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Appointment Type</Label>
+                <Select
+                  value={editAppointmentForm.appointmentType}
+                  onValueChange={(value) =>
+                    setEditAppointmentForm((prev) => ({ ...prev, appointmentType: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select specialty" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(editSpecialties.length ? editSpecialties : ['General Consultation']).map((specialty) => (
+                      <SelectItem key={specialty} value={specialty}>
+                        {specialty}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={editAppointmentForm.appointmentDate}
+                  onChange={(e) =>
+                    setEditAppointmentForm((prev) => ({
+                      ...prev,
+                      appointmentDate: e.target.value,
+                      appointmentTime: '',
+                    }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Time</Label>
+                <Select
+                  value={editAppointmentForm.appointmentTime}
+                  onValueChange={(value) =>
+                    setEditAppointmentForm((prev) => ({ ...prev, appointmentTime: value }))
+                  }
+                  disabled={!editAppointmentForm.doctorId || !editAppointmentForm.appointmentDate || editAvailableTimes.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={editAvailableTimes.length ? 'Select time' : 'No availability'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {editAvailableTimes.map((slot) => (
+                      <SelectItem key={slot} value={slot}>
+                        {slot}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Appointment Status</Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                    <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                    <SelectItem value="CHECKED_IN">Checked In</SelectItem>
+                    <SelectItem value="COMPLETED">Completed</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                    <SelectItem value="MISSED">Missed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Reason for Visit *</Label>
+              <Textarea
+                value={editAppointmentForm.reasonForVisit}
+                onChange={(e) =>
+                  setEditAppointmentForm((prev) => ({ ...prev, reasonForVisit: e.target.value }))
+                }
+                placeholder="Reason for visit"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Symptoms</Label>
+              <Textarea
+                value={editAppointmentForm.symptoms}
+                onChange={(e) =>
+                  setEditAppointmentForm((prev) => ({ ...prev, symptoms: e.target.value }))
+                }
+                placeholder="Symptoms (optional)"
+              />
             </div>
 
             <div className="flex gap-2 pt-4">
@@ -2437,22 +2929,26 @@ export default function AdminDashboard() {
           {selectedAppointment && (
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-gray-600">Patient Name</Label>
-                  <p className="font-medium">
-                    {selectedAppointment.patient.user.firstName} {selectedAppointment.patient.user.lastName}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Contact</Label>
-                  <p className="font-medium">{selectedAppointment.patient.user.phone}</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Doctor</Label>
-                  <p className="font-medium">
-                    {formatDoctorName(`${selectedAppointment.doctor.user.firstName} ${selectedAppointment.doctor.user.lastName}`)}
-                  </p>
-                </div>
+                  <div>
+                    <Label className="text-gray-600">Patient Name</Label>
+                    <p className="font-medium">
+                      {selectedAppointment.patient.user.firstName} {selectedAppointment.patient.user.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Contact</Label>
+                    <p className="font-medium">{selectedAppointment.patient.user.phone}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Patient Gender</Label>
+                    <p className="font-medium">{selectedAppointment.patient.user.gender || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Doctor</Label>
+                    <p className="font-medium">
+                      {formatDoctorName(`${selectedAppointment.doctor.user.firstName} ${selectedAppointment.doctor.user.lastName}`)}
+                    </p>
+                  </div>
                 <div>
                   <Label className="text-gray-600">Appointment Type</Label>
                   <p className="font-medium">{selectedAppointment.appointmentType}</p>
@@ -2463,14 +2959,18 @@ export default function AdminDashboard() {
                     {new Date(selectedAppointment.appointmentDate).toLocaleDateString()}
                   </p>
                 </div>
-                <div>
-                  <Label className="text-gray-600">Time</Label>
-                  <p className="font-medium">{selectedAppointment.appointmentTime}</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600">Status</Label>
-                  <div className="mt-1">{getStatusBadge(selectedAppointment.status)}</div>
-                </div>
+                  <div>
+                    <Label className="text-gray-600">Time</Label>
+                    <p className="font-medium">{selectedAppointment.appointmentTime}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Time With Doctor</Label>
+                    <p className="font-medium">{selectedAppointment.timeWithDoctor || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Status</Label>
+                    <div className="mt-1">{getStatusBadge(selectedAppointment.status)}</div>
+                  </div>
                 {selectedAppointment.checkedIn && (
                   <>
                     <div>
@@ -2487,9 +2987,17 @@ export default function AdminDashboard() {
                     </div>
                   </>
                 )}
+                </div>
+                <div>
+                  <Label className="text-gray-600">Reason for Visit</Label>
+                  <p className="font-medium">{selectedAppointment.reasonForVisit || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-gray-600">Symptoms</Label>
+                  <p className="font-medium">{selectedAppointment.symptoms || 'N/A'}</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </DialogContent>
       </Dialog>
     </div>
