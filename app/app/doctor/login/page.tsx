@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,17 @@ export default function DoctorLoginPage() {
       <div className="w-full max-w-4xl grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="border-2 border-maternal-primary/20 shadow-2xl bg-white/95">
           <CardHeader className="space-y-2">
+            <div className="flex justify-center">
+              <Link href="/" className="relative w-24 h-24">
+                <Image
+                  src="/logo.png"
+                  alt="Natasha Akpoti-Uduaghan Maternity Centre Logo"
+                  fill
+                  className="object-contain"
+                  style={{ filter: 'drop-shadow(0 10px 20px rgba(233, 30, 99, 0.3))' }}
+                />
+              </Link>
+            </div>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-maternal-primary to-maternal-secondary flex items-center justify-center text-white">
                 <Stethoscope className="h-6 w-6" />
@@ -99,9 +111,6 @@ export default function DoctorLoginPage() {
               <p className="text-sm text-gray-500">
                 By signing in you agree to the clinic privacy policy.
               </p>
-              <Link href="/" className="inline-flex text-sm text-maternal-primary hover:underline">
-                Back to Home
-              </Link>
             </form>
           </CardContent>
         </Card>
