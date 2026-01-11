@@ -117,8 +117,9 @@ export default function BookAppointmentPage() {
     () => doctors.filter(d => d.specialization === formData.specialty),
     [doctors, formData.specialty]
   )
-  const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
-  const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
+const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
+const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
+  const displayDoctorName = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
 
   const parseTimeToMinutes = (value: string) => {
     const trimmed = value.trim().toUpperCase()
@@ -431,7 +432,7 @@ export default function BookAppointmentPage() {
                             </div>
                             <div>
                               <h3 className="text-lg font-bold text-gray-900">
-                                {doctor.name}
+                              {displayDoctorName(doctor.name)}
                               </h3>
                               <div className="flex items-center space-x-2 mt-1">
                                 <span className="text-yellow-500">★</span>
@@ -606,7 +607,9 @@ export default function BookAppointmentPage() {
                     </div>
                     <div className="flex justify-between items-center border-b pb-3">
                       <span className="text-gray-600">Doctor:</span>
-                      <span className="font-semibold">{selectedDoctor?.name}</span>
+                      <span className="font-semibold">
+                        {selectedDoctor ? displayDoctorName(selectedDoctor.name) : ''}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center border-b pb-3">
                       <span className="text-gray-600">Date:</span>

@@ -156,9 +156,11 @@ interface PatientProfile {
   phone: string
 }
 
+const stripDoctorPrefix = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+
 const buildNameParts = (fullName?: string) => {
   if (!fullName) return { firstName: '', lastName: '' }
-  const parts = fullName.trim().split(/\s+/)
+  const parts = stripDoctorPrefix(fullName).split(/\s+/)
   return {
     firstName: parts[0] ?? '',
     lastName: parts.slice(1).join(' ') || '',
@@ -427,7 +429,7 @@ export default function AdminDashboard() {
           const data = docSnapshot.data()
           const patientName = data.patientName || data.patient?.name || ''
           const patientParts = buildNameParts(patientName)
-          const doctorName = String(data.doctorName || data.doctor?.name || '').replace(/^Dr\\.?\\s*/i, '')
+          const doctorName = stripDoctorPrefix(String(data.doctorName || data.doctor?.name || ''))
           const doctorParts = buildNameParts(doctorName.replace(/^Dr\\.?\\s*/, ''))
           const appointmentDate = normalizeDateValue(data.appointmentDate)
           const appointmentTime = data.appointmentTime || data.timeSlot || ''
@@ -503,7 +505,7 @@ export default function AdminDashboard() {
       const schedules = doctorsSnapshot.docs.map((docSnapshot) => {
         const doctorData = docSnapshot.data()
         const doctorId = docSnapshot.id
-          const doctorName = String(doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()).replace(/^Dr\\.?\\s*/i, '')
+        const doctorName = stripDoctorPrefix(String(doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()))
         const doctorAppointments = appointmentsData.filter(
           (appointment) => appointment.data.doctorId === doctorId
         )
@@ -970,23 +972,19 @@ export default function AdminDashboard() {
           <TabsList className="grid w-full max-w-2xl grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="appointments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <ClipboardCheck className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Appointments</span>
-              <span className="xs:hidden">Appts</span>
+              <span>Appointments</span>
             </TabsTrigger>
             <TabsTrigger value="schedules" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Schedules</span>
-              <span className="xs:hidden">Sched</span>
+              <span>Schedules</span>
             </TabsTrigger>
             <TabsTrigger value="doctors" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Doctors</span>
-              <span className="xs:hidden">Docs</span>
+              <span>Doctors</span>
             </TabsTrigger>
             <TabsTrigger value="patients" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Patients</span>
-              <span className="xs:hidden">Pts</span>
+              <span>Patients</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1065,7 +1063,7 @@ export default function AdminDashboard() {
                           {appointment.patient.user.firstName} {appointment.patient.user.lastName}
                         </p>
                         <p className="text-xs text-gray-500">
-                          Dr. {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
+                          {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
                         </p>
                         <div className="mt-3 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
@@ -1121,9 +1119,9 @@ export default function AdminDashboard() {
                             </div>
                           </td>
                           <td className="p-2 sm:p-4">
-                            <p className="text-gray-900 text-xs sm:text-base">
-                              Dr. {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
-                            </p>
+                          <p className="text-gray-900 text-xs sm:text-base">
+                            {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
+                          </p>
                           </td>
                           <td className="p-2 sm:p-4">
                             <div>
@@ -1660,7 +1658,7 @@ export default function AdminDashboard() {
                 <div>
                   <Label className="text-gray-600">Doctor</Label>
                   <p className="font-medium">
-                    Dr. {selectedAppointment.doctor.user.firstName} {selectedAppointment.doctor.user.lastName}
+                    {selectedAppointment.doctor.user.firstName} {selectedAppointment.doctor.user.lastName}
                   </p>
                 </div>
                 <div>

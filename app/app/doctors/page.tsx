@@ -11,6 +11,8 @@ import Link from 'next/link'
 import { db } from '@/lib/firebase-config'
 import { collection, getDocs, query } from 'firebase/firestore'
 
+const stripDoctorPrefix = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+
 export default function DoctorsPage() {
   const [doctorList, setDoctorList] = useState(doctors)
 
@@ -24,7 +26,7 @@ export default function DoctorsPage() {
           const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
           return {
             id: docSnapshot.id,
-            name: name || `Dr. ${docSnapshot.id}`,
+            name: stripDoctorPrefix(name || `${docSnapshot.id}`),
             qualification: data.qualification || '',
             specialization: data.specialization || data.specialty || 'General Consultation',
             rating: data.rating || 4.7,
@@ -86,10 +88,10 @@ export default function DoctorsPage() {
                   <CardHeader className="text-center">
                     <div className="mb-4">
                       <div className="w-32 h-32 mx-auto bg-gradient-to-br from-maternal-primary to-maternal-secondary rounded-full flex items-center justify-center text-white text-4xl font-bold">
-                        {doctor.name.split(' ').map(n => n[0]).join('')}
+                        {stripDoctorPrefix(doctor.name).split(' ').map(n => n[0]).join('')}
                       </div>
                     </div>
-                    <CardTitle className="text-2xl">{doctor.name}</CardTitle>
+                    <CardTitle className="text-2xl">{stripDoctorPrefix(doctor.name)}</CardTitle>
                     <CardDescription className="text-base">
                       <span className="text-maternal-primary font-semibold">{doctor.qualification}</span>
                     </CardDescription>

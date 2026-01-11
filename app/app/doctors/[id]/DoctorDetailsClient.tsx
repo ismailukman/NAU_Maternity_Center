@@ -20,6 +20,8 @@ import {
   BriefcaseMedical,
 } from 'lucide-react'
 
+const stripDoctorPrefix = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+
 type DoctorRecord = {
   id: string
   name: string
@@ -65,9 +67,12 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
         }
 
         const data = snapshot.data()
+        const name = stripDoctorPrefix(
+          data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+        )
         setDoctor({
           id: snapshot.id,
-          name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+          name,
           specialization: data.specialization || data.specialty || 'General Consultation',
           qualification: data.qualification || '',
           experience: data.experience ?? '',
@@ -133,7 +138,7 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
               <div className="w-36 h-36 rounded-full bg-white/15 border border-white/30 flex items-center justify-center text-4xl font-bold">
-                {doctor.name.split(' ').map((segment) => segment[0]).join('')}
+                {stripDoctorPrefix(doctor.name).split(' ').map((segment) => segment[0]).join('')}
               </div>
               <div className="text-center md:text-left space-y-3">
                 <Badge className="bg-white/20 border-white/30 text-white">
