@@ -58,6 +58,130 @@ function makeRequest(options, data) {
   });
 }
 
+async function listDoctors(idToken) {
+  const options = {
+    hostname: 'firestore.googleapis.com',
+    path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents/doctors`,
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json'
+    }
+  };
+
+  const result = await makeRequest(options);
+  if (result.status !== 200 || !result.data.documents) {
+    return [];
+  }
+
+  return result.data.documents.map((doc) => {
+    const docId = doc.name.split('/').pop();
+    const fields = doc.fields || {};
+    return {
+      id: docId,
+      name: fields.name?.stringValue || `Dr. ${docId}`,
+      specialization: fields.specialization?.stringValue || fields.specialty?.stringValue || 'General Consultation'
+    };
+  });
+}
+
+async function createDocument(idToken, collectionName, fields) {
+  const options = {
+    hostname: 'firestore.googleapis.com',
+    path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collectionName}`,
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json'
+    }
+  };
+
+  const result = await makeRequest(options, { fields });
+  if (result.status !== 200 && result.status !== 201) {
+    throw new Error(`Failed to create ${collectionName} document`);
+  }
+  const docName = result.data.name || '';
+  return docName.split('/').pop();
+}
+
+async function seedAppointments(idToken) {
+  console.log('\nStep 4: Adding sample patients and appointments...');
+
+  const doctors = await listDoctors(idToken);
+  if (doctors.length === 0) {
+    console.log('⚠️  No doctors found. Skipping appointment seeding.');
+    return;
+  }
+
+  const patients = [
+    { firstName: 'Zainab', lastName: 'Usman', phone: '+234 801 111 1001', email: 'zainab.usman@example.com' },
+    { firstName: 'Halima', lastName: 'Sule', phone: '+234 801 111 1002', email: 'halima.sule@example.com' },
+    { firstName: 'Amaka', lastName: 'Okeke', phone: '+234 801 111 1003', email: 'amaka.okeke@example.com' },
+    { firstName: 'Maryam', lastName: 'Bello', phone: '+234 801 111 1004', email: 'maryam.bello@example.com' },
+    { firstName: 'Ngozi', lastName: 'Eze', phone: '+234 801 111 1005', email: 'ngozi.eze@example.com' },
+    { firstName: 'Fatima', lastName: 'Ibrahim', phone: '+234 801 111 1006', email: 'fatima.ibrahim@example.com' },
+    { firstName: 'Aisha', lastName: 'Abdullahi', phone: '+234 801 111 1007', email: 'aisha.abdullahi@example.com' },
+    { firstName: 'Blessing', lastName: 'Adebayo', phone: '+234 801 111 1008', email: 'blessing.adebayo@example.com' }
+  ];
+
+  const patientIds = [];
+  for (const patient of patients) {
+    const patientId = await createDocument(idToken, 'patients', {
+      firstName: { stringValue: patient.firstName },
+      lastName: { stringValue: patient.lastName },
+      email: { stringValue: patient.email },
+      phone: { stringValue: patient.phone },
+      createdAt: { timestampValue: new Date().toISOString() }
+    });
+    patientIds.push({ id: patientId, ...patient });
+  }
+
+  const timeSlots = [
+    '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM',
+    '11:00 AM', '11:30 AM', '01:00 PM', '01:30 PM',
+    '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM'
+  ];
+  const statuses = ['SCHEDULED', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED'];
+
+  const today = new Date();
+  const appointmentCount = 20;
+  for (let i = 0; i < appointmentCount; i += 1) {
+    const doctor = doctors[i % doctors.length];
+    const patient = patientIds[i % patientIds.length];
+    const date = new Date(today);
+    date.setDate(today.getDate() + (i % 7));
+    const appointmentDate = date.toISOString().split('T')[0];
+    const appointmentTime = timeSlots[i % timeSlots.length];
+    const appointmentNumber = `APT-${appointmentDate.replace(/-/g, '')}-${String(1000 + i)}`;
+    const status = statuses[i % statuses.length];
+    const checkedIn = status === 'CHECKED_IN' || status === 'COMPLETED';
+
+    await createDocument(idToken, 'appointments', {
+      appointmentNumber: { stringValue: appointmentNumber },
+      appointmentType: { stringValue: doctor.specialization },
+      appointmentDate: { stringValue: appointmentDate },
+      appointmentTime: { stringValue: appointmentTime },
+      status: { stringValue: status },
+      checkedIn: { booleanValue: checkedIn },
+      queueNumber: { stringValue: checkedIn ? String(i + 1).padStart(3, '0') : '' },
+      patientId: { stringValue: patient.id },
+      patientName: { stringValue: `${patient.firstName} ${patient.lastName}` },
+      patientFirstName: { stringValue: patient.firstName },
+      patientLastName: { stringValue: patient.lastName },
+      patientEmail: { stringValue: patient.email },
+      patientPhone: { stringValue: patient.phone },
+      doctorId: { stringValue: doctor.id },
+      doctorName: { stringValue: doctor.name },
+      specialty: { stringValue: doctor.specialization },
+      reasonForVisit: { stringValue: 'Routine checkup and consultation.' },
+      symptoms: { stringValue: 'N/A' },
+      createdAt: { timestampValue: new Date().toISOString() }
+    });
+
+    console.log(`✅ Created appointment: ${appointmentNumber}`);
+  }
+}
+
 async function createAdminViaFirebase() {
   console.log('🌱 Starting Firebase database seed via REST API...\n');
 
@@ -333,6 +457,8 @@ async function createAdminViaFirebase() {
     }
 
     console.log('\n🎉 Database seeded successfully!\n');
+    await seedAppointments(idToken);
+    console.log('\n🎉 Appointment data seeded successfully!\n');
     console.log('📧 Admin Email: admin@naumaternity.com');
     console.log('🔑 Admin Password: Main@super54321');
     console.log('\n⚠️  IMPORTANT: Change the password after first login!\n');
