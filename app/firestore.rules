@@ -17,6 +17,9 @@ service cloud.firestore {
     // Admins collection - allow signed-in users to read their own admin record
     match /admins/{adminId} {
       allow read: if isAuthenticated() && request.auth.uid == adminId;
+      allow create: if isAuthenticated()
+                    && request.auth.uid == adminId
+                    && !exists(/databases/$(database)/documents/admins/$(adminId));
       allow write: if isAdmin();
     }
 
