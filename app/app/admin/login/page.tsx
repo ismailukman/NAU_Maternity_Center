@@ -133,6 +133,18 @@ export default function AdminLoginPage() {
                 </div>
               )}
 
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-12 border-maternal-primary/40 text-maternal-primary hover:bg-maternal-lighter"
+                onClick={() => {
+                  setEmail('admin@naumaternity.com')
+                  setPassword('Main@super54321')
+                }}
+              >
+                Demo Admin
+              </Button>
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-gray-700 font-medium">
                   Email Address
