@@ -1349,13 +1349,23 @@ export default function AdminDashboard() {
 
   const handleCheckIn = async (appointmentId: string) => {
     try {
+      const appointmentSnap = await getDoc(doc(db, 'appointments', appointmentId))
+      const appointmentData = appointmentSnap.exists() ? appointmentSnap.data() : null
+      const patientFirst = String(
+        appointmentData?.patientFirstName || appointmentData?.patient?.firstName || ''
+      ).trim()
+      const patientLast = String(
+        appointmentData?.patientLastName || appointmentData?.patient?.lastName || ''
+      ).trim()
+      const patientInitials = `${patientFirst.charAt(0) || 'P'}${patientLast.charAt(0) || 'X'}`.toUpperCase()
+
       const queueNumber = await runTransaction(db, async (transaction) => {
         const counterRef = doc(db, 'queueCounters', todayString)
         const counterSnap = await transaction.get(counterRef)
         const current = counterSnap.exists() ? Number(counterSnap.data()?.lastNumber || 0) : 0
         const next = current + 1
         transaction.set(counterRef, { lastNumber: next, updatedAt: serverTimestamp() }, { merge: true })
-        return String(next).padStart(3, '0')
+        return `${patientInitials}${String(next).padStart(3, '0')}`
       })
 
       await updateDoc(doc(db, 'appointments', appointmentId), {
