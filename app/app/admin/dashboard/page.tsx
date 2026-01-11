@@ -45,6 +45,7 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -1172,10 +1173,15 @@ export default function AdminDashboard() {
 
   const handleCheckIn = async (appointmentId: string) => {
     try {
-      const todayAppointments = await getCountFromServer(
-        query(collection(db, 'appointments'), where('appointmentDate', '==', todayString), where('checkedIn', '==', true))
-      )
-      const queueNumber = String(todayAppointments.data().count + 1).padStart(3, '0')
+      const queueNumber = await runTransaction(db, async (transaction) => {
+        const counterRef = doc(db, 'queueCounters', todayString)
+        const counterSnap = await transaction.get(counterRef)
+        const current = counterSnap.exists() ? Number(counterSnap.data()?.lastNumber || 0) : 0
+        const next = current + 1
+        transaction.set(counterRef, { lastNumber: next, updatedAt: serverTimestamp() }, { merge: true })
+        return String(next).padStart(3, '0')
+      })
+
       await updateDoc(doc(db, 'appointments', appointmentId), {
         checkedIn: true,
         status: 'CHECKED_IN',
