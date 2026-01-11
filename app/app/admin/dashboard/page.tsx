@@ -292,7 +292,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!admin) return
-    const interval = setInterval(() => setNow(new Date()), 60000)
+    const interval = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(interval)
   }, [admin])
 
@@ -427,7 +427,7 @@ export default function AdminDashboard() {
           const data = docSnapshot.data()
           const patientName = data.patientName || data.patient?.name || ''
           const patientParts = buildNameParts(patientName)
-          const doctorName = data.doctorName || data.doctor?.name || ''
+          const doctorName = String(data.doctorName || data.doctor?.name || '').replace(/^Dr\\.?\\s*/i, '')
           const doctorParts = buildNameParts(doctorName.replace(/^Dr\\.?\\s*/, ''))
           const appointmentDate = normalizeDateValue(data.appointmentDate)
           const appointmentTime = data.appointmentTime || data.timeSlot || ''
@@ -503,7 +503,7 @@ export default function AdminDashboard() {
       const schedules = doctorsSnapshot.docs.map((docSnapshot) => {
         const doctorData = docSnapshot.data()
         const doctorId = docSnapshot.id
-        const doctorName = doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()
+          const doctorName = String(doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()).replace(/^Dr\\.?\\s*/i, '')
         const doctorAppointments = appointmentsData.filter(
           (appointment) => appointment.data.doctorId === doctorId
         )
@@ -825,10 +825,12 @@ export default function AdminDashboard() {
     if (!start) return '0m'
     const startDate = new Date(start)
     const diffMs = now.getTime() - startDate.getTime()
-    const minutes = Math.max(Math.floor(diffMs / 60000), 0)
-    const hours = Math.floor(minutes / 60)
-    const remainder = minutes % 60
-    return hours > 0 ? `${hours}h ${remainder}m` : `${remainder}m`
+    const totalSeconds = Math.max(Math.floor(diffMs / 1000), 0)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    const pad = (value: number) => String(value).padStart(2, '0')
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`
   }
 
   const getStatusBadge = (status: string) => {
