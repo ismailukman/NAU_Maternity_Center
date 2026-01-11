@@ -228,7 +228,7 @@ export default function AdminDashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const [activeTab, setActiveTab] = useState('appointments')
-  const [now, setNow] = useState<Date>(new Date())
+  const [now, setNow] = useState<number>(() => Date.now())
   const [showDoctorDialog, setShowDoctorDialog] = useState(false)
   const [showPatientDialog, setShowPatientDialog] = useState(false)
   const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
   }, [admin])
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000)
+    const interval = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -834,7 +834,7 @@ export default function AdminDashboard() {
   const formatElapsed = (start?: string | null) => {
     if (!start) return '0m'
     const startDate = new Date(start)
-    const diffMs = now.getTime() - startDate.getTime()
+    const diffMs = now - startDate.getTime()
     const totalSeconds = Math.max(Math.floor(diffMs / 1000), 0)
     const hours = Math.floor(totalSeconds / 3600)
     const minutes = Math.floor((totalSeconds % 3600) / 60)
