@@ -13,10 +13,13 @@ import { toast } from 'sonner'
 import { db } from '@/lib/firebase-config'
 import {
   addDoc,
+  arrayUnion,
   collection,
+  doc,
   getDocs,
   query,
   serverTimestamp,
+  updateDoc,
   where,
 } from 'firebase/firestore'
 
@@ -117,6 +120,30 @@ export default function BookAppointmentPage() {
   const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
   const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
 
+  const parseTimeToMinutes = (value: string) => {
+    const trimmed = value.trim().toUpperCase()
+    const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/)
+    if (!match) return null
+    let hours = Number(match[1])
+    const minutes = Number(match[2] || '0')
+    const meridiem = match[3]
+    if (meridiem === 'PM' && hours < 12) hours += 12
+    if (meridiem === 'AM' && hours === 12) hours = 0
+    return hours * 60 + minutes
+  }
+
+  const parseWorkingHours = (value: string) => {
+    const [startRaw, endRaw] = value.split('-').map((part) => part.trim())
+    if (!startRaw || !endRaw) return null
+    const start = parseTimeToMinutes(startRaw)
+    const end = parseTimeToMinutes(endRaw)
+    if (start === null || end === null) return null
+    return { start, end }
+  }
+
+  const dayNameForDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', { weekday: 'long' })
+
   const handleNext = () => {
     if (step === 1 && !formData.specialty) {
       toast.error('Please select a specialty')
@@ -145,15 +172,65 @@ export default function BookAppointmentPage() {
 
     setSubmitting(true)
     try {
-      const existingQuery = query(
-        collection(db, 'appointments'),
-        where('doctorId', '==', selectedDoctor.id),
-        where('appointmentDate', '==', formData.date),
-        where('appointmentTime', '==', formData.timeSlot)
+      const doctorSnapshot = await getDocs(
+        query(collection(db, 'doctors'), where('__name__', '==', selectedDoctor.id))
       )
-      const existingSnapshot = await getDocs(existingQuery)
-      if (!existingSnapshot.empty) {
-        toast.error('This time slot is already booked. Please choose another.')
+      const doctorData = doctorSnapshot.docs[0]?.data()
+      const workingHours = doctorData?.workingHours || '09:00 AM - 05:00 PM'
+      const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
+      const workingRange = parseWorkingHours(workingHours)
+      const slotMinutes = parseTimeToMinutes(formData.timeSlot)
+
+      if (!workingRange || slotMinutes === null) {
+        toast.error('Unable to validate the selected time slot.')
+        setSubmitting(false)
+        return
+      }
+
+      const dayName = dayNameForDate(formData.date)
+      if (
+        availability.length > 0 &&
+        !availability.some((day) => day.toLowerCase() === dayName.toLowerCase())
+      ) {
+        toast.error(`Dr. ${selectedDoctor.name} is not available on ${dayName}.`)
+        setSubmitting(false)
+        return
+      }
+
+      if (slotMinutes < workingRange.start || slotMinutes > workingRange.end) {
+        toast.error('Selected time is outside doctor working hours.')
+        setSubmitting(false)
+        return
+      }
+
+      const dateSnapshot = await getDocs(
+        query(collection(db, 'appointments'), where('appointmentDate', '==', formData.date))
+      )
+
+      const timeConflicts = dateSnapshot.docs
+        .map((docSnapshot) => docSnapshot.data())
+        .filter((appointment) => {
+          const time = appointment.appointmentTime || appointment.timeSlot || ''
+          return time === formData.timeSlot
+        })
+
+      const doctorConflict = timeConflicts.some(
+        (appointment) => appointment.doctorId === selectedDoctor.id
+      )
+      if (doctorConflict) {
+        toast.error('This time slot is already booked for the selected doctor.')
+        setSubmitting(false)
+        return
+      }
+
+      const patientConflict = timeConflicts.some((appointment) => {
+        if (formData.email && appointment.patientEmail) {
+          return appointment.patientEmail === formData.email
+        }
+        return appointment.patientPhone === formData.phone
+      })
+      if (patientConflict) {
+        toast.error('You already have an appointment at this time.')
         setSubmitting(false)
         return
       }
@@ -207,6 +284,10 @@ export default function BookAppointmentPage() {
         reasonForVisit: formData.reasonForVisit,
         symptoms: formData.symptoms,
         createdAt: serverTimestamp(),
+      })
+
+      await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
+        bookedSlots: arrayUnion(`${formData.date}|${formData.timeSlot}`),
       })
 
       toast.success('Appointment booked successfully!', {
