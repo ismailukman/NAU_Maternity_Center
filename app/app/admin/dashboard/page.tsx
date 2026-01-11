@@ -203,6 +203,23 @@ const normalizeDateValue = (value: any) => {
   return String(value)
 }
 
+const toDateKey = (value: any) => {
+  const normalized = normalizeDateValue(value)
+  if (!normalized) return ''
+  return normalized.includes('T') ? normalized.split('T')[0] : normalized
+}
+
+const buildAppointmentPatientName = (data: Record<string, any>) => {
+  if (data.patientName) return String(data.patientName)
+  if (data.patient?.name) return String(data.patient.name)
+  if (data.patient?.user?.firstName || data.patient?.user?.lastName) {
+    return `${data.patient.user.firstName || ''} ${data.patient.user.lastName || ''}`.trim()
+  }
+  const firstName = data.patientFirstName || ''
+  const lastName = data.patientLastName || ''
+  return `${firstName} ${lastName}`.trim()
+}
+
 const parseSpecialties = (value: string | string[]) => {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
@@ -793,14 +810,14 @@ export default function AdminDashboard() {
   const fetchDoctorSchedules = async () => {
     try {
       const doctorsSnapshot = await getDocs(query(collection(db, 'doctors')))
-      const appointmentsSnapshot = await getDocs(
-        query(collection(db, 'appointments'), where('appointmentDate', '==', todayString))
-      )
+      const appointmentsSnapshot = await getDocs(query(collection(db, 'appointments')))
 
-      const appointmentsData = appointmentsSnapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        data: docSnapshot.data(),
-      }))
+      const appointmentsData = appointmentsSnapshot.docs
+        .map((docSnapshot) => ({
+          id: docSnapshot.id,
+          data: docSnapshot.data(),
+        }))
+        .filter(({ data }) => toDateKey(data.appointmentDate) === todayString)
 
       const schedules = doctorsSnapshot.docs.map((docSnapshot) => {
         const doctorData = docSnapshot.data()
@@ -812,14 +829,16 @@ export default function AdminDashboard() {
           (appointment) => appointment.data.doctorId === doctorId
         )
 
-        const appointmentItems = doctorAppointments.map(({ id, data }) => ({
-          id,
-          appointmentNumber: data.appointmentNumber || id,
-          patientName: data.patientName || `${data.patientFirstName || ''} ${data.patientLastName || ''}`.trim(),
-          time: data.appointmentTime || data.timeSlot || '',
-          status: data.status || 'PENDING',
-          type: data.appointmentType || data.specialty || data.service || 'General Consultation',
-        }))
+        const appointmentItems = doctorAppointments
+          .map(({ id, data }) => ({
+            id,
+            appointmentNumber: data.appointmentNumber || id,
+            patientName: buildAppointmentPatientName(data),
+            time: data.appointmentTime || data.timeSlot || '',
+            status: data.status || 'PENDING',
+            type: data.appointmentType || data.specialty || data.service || 'General Consultation',
+          }))
+          .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
 
         const totalSlots = parseWorkingHours(
           doctorData.workingHours || '09:00 AM - 05:00 PM',
