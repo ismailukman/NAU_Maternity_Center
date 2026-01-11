@@ -261,6 +261,15 @@ const parseWorkingHours = (workingHours: string, durationMinutes: number) => {
   return Math.floor((endMinutes - startMinutes) / durationMinutes)
 }
 
+const formatDuration = (diffMs: number) => {
+  const totalSeconds = Math.max(Math.floor(diffMs / 1000), 0)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${hours}H:${pad(minutes)}M:${pad(seconds)}s`
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [admin, setAdmin] = useState<Admin | null>(null)
@@ -443,7 +452,7 @@ export default function AdminDashboard() {
 
       await Promise.all(
         updates.map(({ id }) =>
-          updateDoc(doc(db, 'appointments', id), { status: 'MISSED' })
+          updateDoc(doc(db, 'appointments', id), { status: 'MISSED', checkedIn: false, timeWithDoctor: '0H:00M:00s' })
         )
       )
     } catch (error) {
@@ -1086,9 +1095,27 @@ export default function AdminDashboard() {
     if (!selectedAppointment) return
 
     try {
-      await updateDoc(doc(db, 'appointments', selectedAppointment.id), {
+      const updates: Record<string, any> = {
         status: editStatus,
         checkedIn: editStatus === 'CHECKED_IN' ? true : selectedAppointment.checkedIn,
+      }
+
+      if (editStatus === 'COMPLETED') {
+        const startTime = selectedAppointment.checkInTime
+          ? new Date(selectedAppointment.checkInTime).getTime()
+          : null
+        updates.checkedOutTime = new Date().toISOString()
+        updates.checkedIn = false
+        updates.timeWithDoctor = startTime ? formatDuration(Date.now() - startTime) : '0H:00M:00s'
+      }
+
+      if (editStatus === 'CANCELLED' || editStatus === 'MISSED') {
+        updates.checkedIn = false
+        updates.timeWithDoctor = '0H:00M:00s'
+      }
+
+      await updateDoc(doc(db, 'appointments', selectedAppointment.id), {
+        ...updates,
       })
 
       toast.success('Appointment updated successfully')
@@ -1117,10 +1144,14 @@ export default function AdminDashboard() {
 
   const handleCheckout = async (appointmentId: string) => {
     try {
+      const liveAppointment = liveAppointments.find((appointment) => appointment.id === appointmentId)
+      const startTime = liveAppointment?.checkInTime ? new Date(liveAppointment.checkInTime).getTime() : null
+      const timeWithDoctor = startTime ? formatDuration(Date.now() - startTime) : '0H:00M:00s'
       await updateDoc(doc(db, 'appointments', appointmentId), {
         status: 'COMPLETED',
         checkedIn: false,
         checkedOutTime: new Date().toISOString(),
+        timeWithDoctor,
       })
       toast.success('Patient checked out')
       fetchAppointments()
@@ -1132,16 +1163,10 @@ export default function AdminDashboard() {
   }
 
   const formatElapsed = (start?: string | null) => {
-    if (!start) return '0m'
+    if (!start) return '0H:00M:00s'
     const startDate = new Date(start)
     const diffMs = now - startDate.getTime()
-    const totalMinutes = Math.max(Math.floor(diffMs / 60000), 0)
-    const hours = Math.floor(totalMinutes / 60)
-    const minutes = totalMinutes % 60
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`
-    }
-    return `${minutes}m`
+    return formatDuration(diffMs)
   }
 
   const getStatusBadge = (status: string) => {
