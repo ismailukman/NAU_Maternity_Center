@@ -42,20 +42,22 @@ export default function Navbar() {
     <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm overflow-visible">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo - Hanging Lower */}
+          {/* Logo - Responsive with scroll behavior */}
           <Link href="/" className="group relative z-10">
             <div
               className={`transition-all duration-700 ease-out ${
-                isScrolled ? 'w-14 h-14' : 'w-56 h-56'
+                isScrolled
+                  ? 'w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14'
+                  : 'w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-56 lg:h-56'
               }`}
               style={{
-                transform: isScrolled ? 'translateY(0)' : 'translateY(35%)',
+                transform: isScrolled ? 'translateY(0)' : 'translateY(20%)',
               }}
             >
               <div
                 className={`relative w-full h-full ${isScrolled ? '' : 'animate-float-logo'}`}
                 style={{
-                  filter: isScrolled ? 'none' : 'drop-shadow(0 15px 30px rgba(233, 30, 99, 0.4))',
+                  filter: isScrolled ? 'none' : 'drop-shadow(0 8px 16px rgba(233, 30, 99, 0.3))',
                 }}
               >
                 <Image

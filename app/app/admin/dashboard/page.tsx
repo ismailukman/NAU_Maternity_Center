@@ -518,7 +518,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const getStatusBadge = (status: string, checkedIn: boolean = false) => {
+  const getStatusBadge = (status: string) => {
     const variants: Record<string, { color: string; icon: any }> = {
       SCHEDULED: { color: 'bg-blue-100 text-blue-800 border-blue-300', icon: Clock },
       CONFIRMED: { color: 'bg-green-100 text-green-800 border-green-300', icon: CheckCircle },
@@ -533,9 +533,9 @@ export default function AdminDashboard() {
     const Icon = variant.icon
 
     return (
-      <Badge className={`${variant.color} border flex items-center gap-1`}>
+      <Badge className={`${variant.color} border flex items-center gap-1 text-xs`}>
         <Icon className="h-3 w-3" />
-        {status}
+        <span className="hidden sm:inline">{status}</span>
       </Badge>
     )
   }
@@ -566,20 +566,20 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-maternal-lighter/10">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-maternal-primary to-maternal-secondary rounded-full flex items-center justify-center">
-                <Heart className="h-6 w-6 text-white" fill="white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex justify-between items-center gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-maternal-primary to-maternal-secondary rounded-full flex items-center justify-center flex-shrink-0">
+                <Heart className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="white" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-                <p className="text-sm text-gray-600">NAU Maternity Centre Management</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Admin Dashboard</h1>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">NAU Maternity Centre Management</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <div className="text-right hidden md:block">
                 <p className="text-sm font-medium text-gray-900">
                   {admin?.firstName} {admin?.lastName}
                 </p>
@@ -588,10 +588,10 @@ export default function AdminDashboard() {
               <Button
                 onClick={handleLogout}
                 variant="outline"
-                className="border-2 border-maternal-primary text-maternal-primary hover:bg-maternal-lighter"
+                className="border-2 border-maternal-primary text-maternal-primary hover:bg-maternal-lighter text-sm sm:text-base px-3 sm:px-4"
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
+                <LogOut className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Logout</span>
               </Button>
             </div>
           </div>
@@ -646,13 +646,15 @@ export default function AdminDashboard() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="appointments" className="flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4" />
-              Appointments
+            <TabsTrigger value="appointments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <ClipboardCheck className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Appointments</span>
+              <span className="xs:hidden">Appts</span>
             </TabsTrigger>
-            <TabsTrigger value="doctors" className="flex items-center gap-2">
-              <Stethoscope className="h-4 w-4" />
-              Doctor Schedules
+            <TabsTrigger value="doctors" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Doctor Schedules</span>
+              <span className="xs:hidden">Doctors</span>
             </TabsTrigger>
           </TabsList>
 
@@ -660,10 +662,10 @@ export default function AdminDashboard() {
           <TabsContent value="appointments">
             <Card className="border-2 border-gray-100 shadow-lg">
               <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex flex-col gap-4">
                   <div>
-                    <CardTitle className="text-2xl">Appointments Management</CardTitle>
-                    <CardDescription>View, check-in, edit, and manage all appointments</CardDescription>
+                    <CardTitle className="text-xl sm:text-2xl">Appointments Management</CardTitle>
+                    <CardDescription className="text-sm">View, check-in, edit, and manage all appointments</CardDescription>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -673,12 +675,12 @@ export default function AdminDashboard() {
                         placeholder="Search by patient name..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                        className="pl-10"
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                        className="pl-10 text-sm sm:text-base"
                       />
                     </div>
                     <Select value={filterStatus} onValueChange={setFilterStatus}>
-                      <SelectTrigger className="w-full sm:w-40">
+                      <SelectTrigger className="w-full sm:w-40 text-sm sm:text-base">
                         <Filter className="h-4 w-4 mr-2" />
                         <SelectValue placeholder="Filter Status" />
                       </SelectTrigger>
@@ -692,105 +694,106 @@ export default function AdminDashboard() {
                         <SelectItem value="MISSED">Missed</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button onClick={handleSearch} className="maternal-gradient">
+                    <Button onClick={handleSearch} className="maternal-gradient text-sm sm:text-base">
                       Search
                     </Button>
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+              <CardContent className="p-2 sm:p-6">
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
+                  <table className="w-full min-w-[800px]">
                     <thead>
                       <tr className="border-b-2 border-gray-200">
-                        <th className="text-left p-4 font-semibold text-gray-700">Appointment #</th>
-                        <th className="text-left p-4 font-semibold text-gray-700">Patient</th>
-                        <th className="text-left p-4 font-semibold text-gray-700">Doctor</th>
-                        <th className="text-left p-4 font-semibold text-gray-700">Date & Time</th>
-                        <th className="text-left p-4 font-semibold text-gray-700">Status</th>
-                        <th className="text-left p-4 font-semibold text-gray-700">Queue</th>
-                        <th className="text-right p-4 font-semibold text-gray-700">Actions</th>
+                        <th className="text-left p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Appointment #</th>
+                        <th className="text-left p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Patient</th>
+                        <th className="text-left p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Doctor</th>
+                        <th className="text-left p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Date & Time</th>
+                        <th className="text-left p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Status</th>
+                        <th className="text-left p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Queue</th>
+                        <th className="text-right p-2 sm:p-4 font-semibold text-gray-700 text-xs sm:text-sm">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {appointments.map((appointment) => (
                         <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="p-4">
-                            <span className="font-mono text-sm font-semibold text-maternal-primary">
+                          <td className="p-2 sm:p-4">
+                            <span className="font-mono text-xs sm:text-sm font-semibold text-maternal-primary">
                               {appointment.appointmentNumber}
                             </span>
                           </td>
-                          <td className="p-4">
+                          <td className="p-2 sm:p-4">
                             <div>
-                              <p className="font-medium text-gray-900">
+                              <p className="font-medium text-gray-900 text-xs sm:text-base">
                                 {appointment.patient.user.firstName} {appointment.patient.user.lastName}
                               </p>
-                              <p className="text-sm text-gray-600">{appointment.patient.user.phone}</p>
+                              <p className="text-xs sm:text-sm text-gray-600">{appointment.patient.user.phone}</p>
                             </div>
                           </td>
-                          <td className="p-4">
-                            <p className="text-gray-900">
+                          <td className="p-2 sm:p-4">
+                            <p className="text-gray-900 text-xs sm:text-base">
                               Dr. {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
                             </p>
                           </td>
-                          <td className="p-4">
+                          <td className="p-2 sm:p-4">
                             <div>
-                              <p className="text-gray-900">
+                              <p className="text-gray-900 text-xs sm:text-base">
                                 {new Date(appointment.appointmentDate).toLocaleDateString()}
                               </p>
-                              <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
+                              <p className="text-xs sm:text-sm text-gray-600">{appointment.appointmentTime}</p>
                             </div>
                           </td>
-                          <td className="p-4">{getStatusBadge(appointment.status, appointment.checkedIn)}</td>
-                          <td className="p-4">
+                          <td className="p-2 sm:p-4">{getStatusBadge(appointment.status)}</td>
+                          <td className="p-2 sm:p-4">
                             {appointment.queueNumber && (
-                              <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300 border font-mono">
+                              <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300 border font-mono text-xs">
                                 {appointment.queueNumber}
                               </Badge>
                             )}
                           </td>
-                          <td className="p-4">
-                            <div className="flex justify-end gap-2">
+                          <td className="p-2 sm:p-4">
+                            <div className="flex justify-end gap-1 sm:gap-2">
                               {canCheckIn(appointment) && (
                                 <Button
                                   size="sm"
-                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 sm:px-3"
                                   onClick={() => handleCheckIn(appointment.id)}
                                 >
-                                  <UserCheck className="h-4 w-4 mr-1" />
-                                  Check In
+                                  <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                                  <span className="hidden sm:inline">Check In</span>
                                 </Button>
                               )}
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="px-2 sm:px-3"
                                 onClick={() => {
                                   setSelectedAppointment(appointment)
                                   setShowViewDialog(true)
                                 }}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                                className="border-blue-300 text-blue-600 hover:bg-blue-50 px-2 sm:px-3"
                                 onClick={() => {
                                   setSelectedAppointment(appointment)
                                   setEditStatus(appointment.status)
                                   setShowEditDialog(true)
                                 }}
                               >
-                                <Edit className="h-4 w-4" />
+                                <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-red-300 text-red-600 hover:bg-red-50"
+                                className="border-red-300 text-red-600 hover:bg-red-50 px-2 sm:px-3"
                                 onClick={() => handleDeleteAppointment(appointment.id)}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
                             </div>
                           </td>
@@ -994,7 +997,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <Label className="text-gray-600">Status</Label>
-                  <div className="mt-1">{getStatusBadge(selectedAppointment.status, selectedAppointment.checkedIn)}</div>
+                  <div className="mt-1">{getStatusBadge(selectedAppointment.status)}</div>
                 </div>
                 {selectedAppointment.checkedIn && (
                   <>
