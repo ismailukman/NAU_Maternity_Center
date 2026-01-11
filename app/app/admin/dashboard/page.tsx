@@ -262,7 +262,7 @@ export default function AdminDashboard() {
         )
       )
     } catch (error) {
-      console.error('Failed to mark missed appointments:', error)
+      console.error('Failed to update missed appointments:', error)
     }
   }
 
@@ -300,7 +300,7 @@ export default function AdminDashboard() {
         totalDoctors: totalDoctorsSnap.data().count,
       })
     } catch (error) {
-      console.error('Failed to fetch stats:', error)
+      console.error('Failed to load stats:', error)
     }
   }
 
@@ -375,7 +375,7 @@ export default function AdminDashboard() {
       const paged = filtered.slice(start, start + pageSize)
       setAppointments(paged)
     } catch (error) {
-      console.error('Failed to fetch appointments:', error)
+      console.error('Failed to load appointments:', error)
     }
   }
 
@@ -436,7 +436,7 @@ export default function AdminDashboard() {
 
       setDoctorSchedules(schedules)
     } catch (error) {
-      console.error('Failed to fetch doctor schedules:', error)
+      console.error('Failed to load doctor schedules:', error)
     }
   }
 
