@@ -839,8 +839,16 @@ export default function AdminDashboard() {
   const handleCreateAppointment = async () => {
     const appointmentDate = appointmentForm.appointmentDate.trim()
     const appointmentTime = appointmentForm.appointmentTime.trim()
-    if (!appointmentForm.doctorId || !appointmentDate || !appointmentTime) {
-      toast.error('Please select a doctor, date, and time.')
+    if (!appointmentForm.doctorId) {
+      toast.error('Please select a doctor.')
+      return
+    }
+    if (!appointmentDate) {
+      toast.error('Please select a date.')
+      return
+    }
+    if (!appointmentTime) {
+      toast.error('Please select a time.')
       return
     }
     if (appointmentForm.patientType === 'existing' && !appointmentForm.patientId) {
