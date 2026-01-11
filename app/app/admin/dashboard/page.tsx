@@ -156,7 +156,16 @@ interface PatientProfile {
   phone: string
 }
 
-const stripDoctorPrefix = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+const stripDoctorPrefix = (name: string) =>
+  name.replace(/^prof\.?\s*dr\.?\s*/i, '').replace(/^dr\.?\s*/i, '').trim()
+
+const formatDoctorName = (name: string) => {
+  const trimmed = name.trim()
+  if (!trimmed) return ''
+  if (/^prof\.?\s*dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+  if (/^dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+  return `Dr. ${trimmed}`
+}
 
 const buildNameParts = (fullName?: string) => {
   if (!fullName) return { firstName: '', lastName: '' }
@@ -1063,7 +1072,7 @@ export default function AdminDashboard() {
                           {appointment.patient.user.firstName} {appointment.patient.user.lastName}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
+                          {formatDoctorName(`${appointment.doctor.user.firstName} ${appointment.doctor.user.lastName}`)}
                         </p>
                         <div className="mt-3 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
@@ -1120,7 +1129,7 @@ export default function AdminDashboard() {
                           </td>
                           <td className="p-2 sm:p-4">
                           <p className="text-gray-900 text-xs sm:text-base">
-                            {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
+                            {formatDoctorName(`${appointment.doctor.user.firstName} ${appointment.doctor.user.lastName}`)}
                           </p>
                           </td>
                           <td className="p-2 sm:p-4">
@@ -1658,7 +1667,7 @@ export default function AdminDashboard() {
                 <div>
                   <Label className="text-gray-600">Doctor</Label>
                   <p className="font-medium">
-                    {selectedAppointment.doctor.user.firstName} {selectedAppointment.doctor.user.lastName}
+                    {formatDoctorName(`${selectedAppointment.doctor.user.firstName} ${selectedAppointment.doctor.user.lastName}`)}
                   </p>
                 </div>
                 <div>

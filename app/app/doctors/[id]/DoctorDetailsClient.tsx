@@ -20,7 +20,16 @@ import {
   BriefcaseMedical,
 } from 'lucide-react'
 
-const stripDoctorPrefix = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+const stripDoctorPrefix = (name: string) =>
+  name.replace(/^prof\.?\s*dr\.?\s*/i, '').replace(/^dr\.?\s*/i, '').trim()
+
+const formatDoctorName = (name: string) => {
+  const trimmed = name.trim()
+  if (!trimmed) return ''
+  if (/^prof\.?\s*dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+  if (/^dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+  return `Dr. ${trimmed}`
+}
 
 type DoctorRecord = {
   id: string
@@ -67,9 +76,7 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
         }
 
         const data = snapshot.data()
-        const name = stripDoctorPrefix(
-          data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
-        )
+        const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
         setDoctor({
           id: snapshot.id,
           name,
@@ -144,7 +151,7 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
                 <Badge className="bg-white/20 border-white/30 text-white">
                   {doctor.specialization}
                 </Badge>
-                <h1 className="text-4xl md:text-5xl font-bold">{doctor.name}</h1>
+                <h1 className="text-4xl md:text-5xl font-bold">{formatDoctorName(doctor.name)}</h1>
                 {doctor.qualification && (
                   <p className="text-lg text-white/90">{doctor.qualification}</p>
                 )}
@@ -186,7 +193,9 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
           <div className="grid gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2 border-2 border-gray-100 shadow-lg">
               <CardHeader>
-                <CardTitle className="text-2xl">About Dr. {doctor.name.split(' ')[1] || doctor.name}</CardTitle>
+                <CardTitle className="text-2xl">
+                  About {formatDoctorName(doctor.name)}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 text-gray-700">
                 <p>{doctor.bio}</p>

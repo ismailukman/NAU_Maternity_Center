@@ -119,7 +119,13 @@ export default function BookAppointmentPage() {
   )
 const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
 const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
-  const displayDoctorName = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+  const displayDoctorName = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return ''
+    if (/^prof\.?\s*dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+    if (/^dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+    return `Dr. ${trimmed}`
+  }
 
   const parseTimeToMinutes = (value: string) => {
     const trimmed = value.trim().toUpperCase()

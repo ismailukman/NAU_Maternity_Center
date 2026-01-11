@@ -11,7 +11,16 @@ import Link from 'next/link'
 import { db } from '@/lib/firebase-config'
 import { collection, getDocs, query } from 'firebase/firestore'
 
-const stripDoctorPrefix = (name: string) => name.replace(/^Dr\.?\s*/i, '').trim()
+const stripDoctorPrefix = (name: string) =>
+  name.replace(/^prof\.?\s*dr\.?\s*/i, '').replace(/^dr\.?\s*/i, '').trim()
+
+const formatDoctorName = (name: string) => {
+  const trimmed = name.trim()
+  if (!trimmed) return ''
+  if (/^prof\.?\s*dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+  if (/^dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+  return `Dr. ${trimmed}`
+}
 
 export default function DoctorsPage() {
   const [doctorList, setDoctorList] = useState(doctors)
@@ -26,7 +35,7 @@ export default function DoctorsPage() {
           const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
           return {
             id: docSnapshot.id,
-            name: stripDoctorPrefix(name || `${docSnapshot.id}`),
+            name: name || `${docSnapshot.id}`,
             qualification: data.qualification || '',
             specialization: data.specialization || data.specialty || 'General Consultation',
             rating: data.rating || 4.7,
@@ -91,7 +100,7 @@ export default function DoctorsPage() {
                         {stripDoctorPrefix(doctor.name).split(' ').map(n => n[0]).join('')}
                       </div>
                     </div>
-                    <CardTitle className="text-2xl">{stripDoctorPrefix(doctor.name)}</CardTitle>
+                    <CardTitle className="text-2xl">{formatDoctorName(doctor.name)}</CardTitle>
                     <CardDescription className="text-base">
                       <span className="text-maternal-primary font-semibold">{doctor.qualification}</span>
                     </CardDescription>
