@@ -513,7 +513,9 @@ export default function AdminDashboard() {
       const schedules = doctorsSnapshot.docs.map((docSnapshot) => {
         const doctorData = docSnapshot.data()
         const doctorId = docSnapshot.id
-        const doctorName = stripDoctorPrefix(String(doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()))
+        const rawDoctorName = String(
+          doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()
+        ).trim()
         const doctorAppointments = appointmentsData.filter(
           (appointment) => appointment.data.doctorId === doctorId
         )
@@ -538,7 +540,7 @@ export default function AdminDashboard() {
         return {
           doctor: {
             id: doctorId,
-            name: doctorName || `Dr. ${doctorId}`,
+            name: rawDoctorName ? formatDoctorName(rawDoctorName) : `Dr. ${doctorId}`,
             specialization: doctorData.specialization || 'General',
             workingHours: doctorData.workingHours || '09:00 AM - 05:00 PM',
             consultationDuration: doctorData.consultationDuration || 30,
