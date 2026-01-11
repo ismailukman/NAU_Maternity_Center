@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,23 +24,43 @@ const formatDoctorName = (name: string) => {
 
 export default function DoctorsPage() {
   const [doctorList, setDoctorList] = useState(doctors)
+  const [selectedSpecialty, setSelectedSpecialty] = useState('All Doctors')
+
+  const specialties = useMemo(() => {
+    const values = new Set<string>()
+    doctorList.forEach((doctor) => {
+      if (doctor.specialization) values.add(doctor.specialization)
+    })
+    values.add('General Consultation')
+    return ['All Doctors', ...Array.from(values).sort((a, b) => a.localeCompare(b))]
+  }, [doctorList])
+
+  const filteredDoctors = useMemo(() => {
+    if (selectedSpecialty === 'All Doctors') return doctorList
+    return doctorList.filter((doctor) => doctor.specialization === selectedSpecialty)
+  }, [doctorList, selectedSpecialty])
 
   useEffect(() => {
     const loadDoctors = async () => {
       try {
         const snapshot = await getDocs(query(collection(db, 'doctors')))
         if (snapshot.empty) return
-        const mapped = snapshot.docs.map((docSnapshot) => {
-          const data = docSnapshot.data()
-          const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
-          return {
-            id: docSnapshot.id,
-            name: name || `${docSnapshot.id}`,
-            qualification: data.qualification || '',
-            specialization: data.specialization || data.specialty || 'General Consultation',
-            rating: data.rating || 4.7,
-            reviews: data.reviews || 0,
-            experience: data.experience || '',
+          const mapped = snapshot.docs.map((docSnapshot) => {
+            const data = docSnapshot.data()
+            const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+            const specialization =
+              data.specialization ||
+              data.specialty ||
+              (Array.isArray(data.specialties) ? data.specialties[0] : '') ||
+              'General Consultation'
+            return {
+              id: docSnapshot.id,
+              name: name || `${docSnapshot.id}`,
+              qualification: data.qualification || '',
+              specialization,
+              rating: data.rating || 4.7,
+              reviews: data.reviews || 0,
+              experience: data.experience || '',
             languages: Array.isArray(data.languages)
               ? [...data.languages].sort((a, b) => String(a).localeCompare(String(b)))
               : [],
@@ -81,11 +101,19 @@ export default function DoctorsPage() {
         <section className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-wrap gap-3">
-              <Badge className="cursor-pointer px-4 py-2 bg-maternal-primary">All Doctors</Badge>
-              <Badge variant="secondary" className="cursor-pointer px-4 py-2">OB/GYN</Badge>
-              <Badge variant="secondary" className="cursor-pointer px-4 py-2">Pediatrics</Badge>
-              <Badge variant="secondary" className="cursor-pointer px-4 py-2">Neonatology</Badge>
-              <Badge variant="secondary" className="cursor-pointer px-4 py-2">Lactation Consultant</Badge>
+              {specialties.map((specialty) => {
+                const isActive = selectedSpecialty === specialty
+                return (
+                  <Badge
+                    key={specialty}
+                    className={`cursor-pointer px-4 py-2 ${isActive ? 'bg-maternal-primary' : ''}`}
+                    variant={isActive ? 'default' : 'secondary'}
+                    onClick={() => setSelectedSpecialty(specialty)}
+                  >
+                    {specialty}
+                  </Badge>
+                )
+              })}
             </div>
           </div>
         </section>
@@ -94,7 +122,7 @@ export default function DoctorsPage() {
         <section className="py-12 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {doctorList.map((doctor) => (
+              {filteredDoctors.map((doctor) => (
                 <Card key={doctor.id} className="hover:shadow-xl transition-shadow">
                   <CardHeader className="text-center">
                     <div className="mb-4">
