@@ -2042,7 +2042,7 @@ export default function AdminDashboard() {
           >
             <TabsTrigger value="appointments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <ClipboardCheck className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span>Appointments</span>
+              <span>Appointment Management</span>
             </TabsTrigger>
             <TabsTrigger value="schedules" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -2059,7 +2059,7 @@ export default function AdminDashboard() {
             {isSuperAdmin && (
               <TabsTrigger value="admins" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                 <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span>Admins</span>
+                <span>Admin Management</span>
               </TabsTrigger>
             )}
           </TabsList>
