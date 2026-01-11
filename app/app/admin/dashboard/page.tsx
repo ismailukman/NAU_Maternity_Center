@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import Image from 'next/image'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Calendar,
@@ -560,8 +561,15 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex justify-between items-center gap-2">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-maternal-primary to-maternal-secondary rounded-full flex items-center justify-center flex-shrink-0">
-                <Heart className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center flex-shrink-0 shadow-md border border-maternal-light/40">
+                <div className="relative w-7 h-7 sm:w-9 sm:h-9">
+                  <Image
+                    src="/logo.png"
+                    alt="Natasha Akpoti-Uduaghan Maternity Centre Logo"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Admin Dashboard</h1>
