@@ -1,12 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
+import { db } from '@/lib/firebase-config'
+import { collection, getDocs, query } from 'firebase/firestore'
 import {
   Activity,
   Baby,
@@ -70,6 +72,65 @@ const postpartumCare = [
   { label: 'Family Planning', value: 'Discuss after 6-week visit' },
 ]
 
+const growthMetrics = [
+  {
+    id: 'weight',
+    label: 'Estimated Fetal Weight',
+    unit: 'g',
+    color: '#E91E63',
+    points: [
+      { week: 16, date: '2025-10-02', value: 150 },
+      { week: 20, date: '2025-11-01', value: 320 },
+      { week: 24, date: '2025-12-01', value: 650 },
+      { week: 28, date: '2025-12-28', value: 1050 },
+      { week: 30, date: '2026-01-08', value: 1350 },
+      { week: 32, date: '2026-01-22', value: 1700 },
+    ],
+  },
+  {
+    id: 'bpd',
+    label: 'Biparietal Diameter',
+    unit: 'mm',
+    color: '#6D28D9',
+    points: [
+      { week: 16, date: '2025-10-02', value: 34 },
+      { week: 20, date: '2025-11-01', value: 46 },
+      { week: 24, date: '2025-12-01', value: 58 },
+      { week: 28, date: '2025-12-28', value: 71 },
+      { week: 30, date: '2026-01-08', value: 77 },
+      { week: 32, date: '2026-01-22', value: 82 },
+    ],
+  },
+  {
+    id: 'fl',
+    label: 'Femur Length',
+    unit: 'mm',
+    color: '#0EA5E9',
+    points: [
+      { week: 16, date: '2025-10-02', value: 22 },
+      { week: 20, date: '2025-11-01', value: 32 },
+      { week: 24, date: '2025-12-01', value: 43 },
+      { week: 28, date: '2025-12-28', value: 54 },
+      { week: 30, date: '2026-01-08', value: 59 },
+      { week: 32, date: '2026-01-22', value: 63 },
+    ],
+  },
+  {
+    id: 'hc',
+    label: 'Head Circumference',
+    unit: 'mm',
+    color: '#10B981',
+    points: [
+      { week: 16, date: '2025-10-02', value: 125 },
+      { week: 20, date: '2025-11-01', value: 165 },
+      { week: 24, date: '2025-12-01', value: 205 },
+      { week: 28, date: '2025-12-28', value: 245 },
+      { week: 30, date: '2026-01-08', value: 265 },
+      { week: 32, date: '2026-01-22', value: 280 },
+    ],
+  },
+]
+
 const labResults = [
   { label: 'Hb', value: '11.2 g/dL', status: 'Borderline' },
   { label: 'Urinalysis', value: 'Protein negative', status: 'Normal' },
@@ -90,8 +151,48 @@ const tabs = [
   { value: 'postpartum', label: 'Postpartum', icon: Activity },
 ]
 
+type PatientOption = {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+}
+
 export default function DoctorDashboardPage() {
   const [search, setSearch] = useState('')
+  const [patients, setPatients] = useState<PatientOption[]>([])
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [showTrends, setShowTrends] = useState(false)
+  const [activeMetricId, setActiveMetricId] = useState(growthMetrics[0].id)
+  const [activePointIndex, setActivePointIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    const loadPatients = async () => {
+      try {
+        const snapshot = await getDocs(query(collection(db, 'patients')))
+        const mapped = snapshot.docs.map((docSnapshot) => {
+          const data = docSnapshot.data()
+          return {
+            id: docSnapshot.id,
+            firstName: data.firstName || '',
+            lastName: data.lastName || '',
+            email: data.email || '',
+            phone: data.phone || '',
+          }
+        })
+        mapped.sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+        setPatients(mapped)
+        if (!selectedPatientId && mapped.length > 0) {
+          setSelectedPatientId(mapped[0].id)
+        }
+      } catch (error) {
+        console.error('Failed to load patients:', error)
+      }
+    }
+
+    loadPatients()
+  }, [])
 
   const filteredTimeline = useMemo(() => {
     if (!search.trim()) return prenatalTimeline
@@ -99,6 +200,38 @@ export default function DoctorDashboardPage() {
       `${item.title} ${item.detail}`.toLowerCase().includes(search.toLowerCase())
     )
   }, [search])
+
+  const activePatient = useMemo(() => {
+    if (!selectedPatientId) return null
+    return patients.find((patient) => patient.id === selectedPatientId) || null
+  }, [patients, selectedPatientId])
+
+  const selectedMetric = useMemo(
+    () => growthMetrics.find((metric) => metric.id === activeMetricId) || growthMetrics[0],
+    [activeMetricId]
+  )
+
+  const chartPoints = useMemo(() => {
+    const points = selectedMetric.points
+    const minValue = Math.min(...points.map((point) => point.value))
+    const maxValue = Math.max(...points.map((point) => point.value))
+    const minWeek = Math.min(...points.map((point) => point.week))
+    const maxWeek = Math.max(...points.map((point) => point.week))
+    const paddingX = 40
+    const paddingY = 24
+    const width = 640
+    const height = 220
+    const valueRange = maxValue - minValue || 1
+    const weekRange = maxWeek - minWeek || 1
+
+    const normalized = points.map((point) => {
+      const x = paddingX + ((point.week - minWeek) / weekRange) * (width - paddingX * 2)
+      const y = height - paddingY - ((point.value - minValue) / valueRange) * (height - paddingY * 2)
+      return { ...point, x, y }
+    })
+
+    return { normalized, width, height }
+  }, [selectedMetric])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-maternal-lighter/10 to-maternal-secondary/10">
@@ -136,16 +269,42 @@ export default function DoctorDashboardPage() {
                 <CardTitle className="text-2xl">Active Patient</CardTitle>
                 <CardDescription>Comprehensive maternal record tracking</CardDescription>
               </div>
-              <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
-                Risk Level: {patientProfile.riskLevel}
-              </Badge>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="border border-gray-200 rounded-lg bg-white px-3 py-2">
+                  <p className="text-xs text-gray-500 mb-1">Select Patient</p>
+                  <select
+                    className="bg-transparent text-sm font-semibold text-gray-900 focus:outline-none"
+                    value={selectedPatientId}
+                    onChange={(event) => setSelectedPatientId(event.target.value)}
+                  >
+                    {patients.length === 0 && <option value="">No patients found</option>}
+                    {patients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.firstName} {patient.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
+                  Risk Level: {patientProfile.riskLevel}
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl bg-maternal-lighter/40 border border-maternal-primary/10">
                   <p className="text-xs text-gray-500">Patient</p>
-                  <p className="text-lg font-semibold text-gray-900">{patientProfile.name}</p>
-                  <p className="text-sm text-gray-600">ID: {patientProfile.patientId}</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {activePatient ? `${activePatient.firstName} ${activePatient.lastName}` : patientProfile.name}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    ID: {activePatient ? activePatient.id : patientProfile.patientId}
+                  </p>
+                  {activePatient && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {[activePatient.email, activePatient.phone].filter(Boolean).join(' • ')}
+                    </p>
+                  )}
                 </div>
                 <div className="p-4 rounded-xl bg-white border border-gray-200">
                   <p className="text-xs text-gray-500">Gestational Age</p>
@@ -215,9 +374,13 @@ export default function DoctorDashboardPage() {
                 <Calendar className="mr-2 h-4 w-4" />
                 Schedule Next Visit
               </Button>
-              <Button variant="outline" className="w-full border-maternal-primary text-maternal-primary">
+              <Button
+                variant="outline"
+                className="w-full border-maternal-primary text-maternal-primary"
+                onClick={() => setShowTrends((prev) => !prev)}
+              >
                 <LineChart className="mr-2 h-4 w-4" />
-                View Growth Trends
+                {showTrends ? 'Hide Growth Trends' : 'View Growth Trends'}
               </Button>
               <Button variant="outline" className="w-full border-gray-300">
                 <ShieldCheck className="mr-2 h-4 w-4" />
@@ -237,6 +400,109 @@ export default function DoctorDashboardPage() {
             </CardContent>
           </Card>
         </section>
+
+        {showTrends && (
+          <section>
+            <Card className="border-2 border-gray-100 shadow-lg">
+              <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl">Fetal Growth Trends</CardTitle>
+                  <CardDescription>Interactive ultrasound and biometric tracking over time.</CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {growthMetrics.map((metric) => (
+                    <Button
+                      key={metric.id}
+                      variant={metric.id === activeMetricId ? 'default' : 'outline'}
+                      className={`text-xs sm:text-sm ${
+                        metric.id === activeMetricId ? 'maternal-gradient' : 'border-gray-200'
+                      }`}
+                      onClick={() => setActiveMetricId(metric.id)}
+                    >
+                      {metric.label}
+                    </Button>
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Current Metric</p>
+                      <p className="text-lg font-semibold text-gray-900">{selectedMetric.label}</p>
+                    </div>
+                    <Badge className="bg-maternal-light text-maternal-primary border border-maternal-primary/30">
+                      Last reading: {selectedMetric.points[selectedMetric.points.length - 1].value}
+                      {selectedMetric.unit}
+                    </Badge>
+                  </div>
+
+                  <div className="relative">
+                    <svg
+                      viewBox={`0 0 ${chartPoints.width} ${chartPoints.height}`}
+                      className="w-full h-64"
+                      onMouseLeave={() => setActivePointIndex(null)}
+                    >
+                      <defs>
+                        <linearGradient id="trendGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor={selectedMetric.color} stopOpacity="0.2" />
+                          <stop offset="100%" stopColor={selectedMetric.color} stopOpacity="0.05" />
+                        </linearGradient>
+                      </defs>
+                      {[0, 1, 2, 3, 4].map((row) => (
+                        <line
+                          key={row}
+                          x1="40"
+                          x2={chartPoints.width - 40}
+                          y1={24 + row * 42}
+                          y2={24 + row * 42}
+                          stroke="#E5E7EB"
+                          strokeDasharray="4 6"
+                        />
+                      ))}
+                      <polyline
+                        fill="url(#trendGradient)"
+                        stroke={selectedMetric.color}
+                        strokeWidth="3"
+                        points={chartPoints.normalized.map((point) => `${point.x},${point.y}`).join(' ')}
+                      />
+                      {chartPoints.normalized.map((point, index) => (
+                        <circle
+                          key={point.date}
+                          cx={point.x}
+                          cy={point.y}
+                          r={activePointIndex === index ? 7 : 5}
+                          fill={selectedMetric.color}
+                          stroke="#fff"
+                          strokeWidth="2"
+                          onMouseEnter={() => setActivePointIndex(index)}
+                        />
+                      ))}
+                    </svg>
+
+                    {activePointIndex !== null && (
+                      <div className="absolute right-6 top-6 rounded-xl bg-white shadow-lg border border-gray-200 p-4 text-sm">
+                        <p className="text-xs text-gray-500">Week {chartPoints.normalized[activePointIndex].week}</p>
+                        <p className="font-semibold text-gray-900">
+                          {chartPoints.normalized[activePointIndex].value}
+                          {selectedMetric.unit}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {chartPoints.normalized[activePointIndex].date}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-4 text-xs text-gray-500">
+                    {chartPoints.normalized.map((point) => (
+                      <span key={point.date}>Week {point.week}</span>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         <section>
           <Card className="border-2 border-gray-100 shadow-lg">

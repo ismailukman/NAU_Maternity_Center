@@ -31,10 +31,10 @@ service cloud.firestore {
       allow update, delete: if isSuperAdmin();
     }
 
-    // Patients collection - admins can read/write, users can read their own
+    // Patients collection - public read for doctor portal demo, admins can write
     match /patients/{patientId} {
-      allow read, write: if isAdmin();
-      allow read: if isAuthenticated() && request.auth.uid == patientId;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // Appointments collection - admins can read/write, users can read their own
