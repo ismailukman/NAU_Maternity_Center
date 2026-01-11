@@ -837,12 +837,13 @@ export default function AdminDashboard() {
     if (!start) return '0m'
     const startDate = new Date(start)
     const diffMs = now - startDate.getTime()
-    const totalSeconds = Math.max(Math.floor(diffMs / 1000), 0)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    const pad = (value: number) => String(value).padStart(2, '0')
-    return `${hours}:${pad(minutes)}:${pad(seconds)}`
+    const totalMinutes = Math.max(Math.floor(diffMs / 60000), 0)
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`
+    }
+    return `${minutes}m`
   }
 
   const getStatusBadge = (status: string) => {
