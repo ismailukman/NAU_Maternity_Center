@@ -233,21 +233,6 @@ export default function DoctorDashboardPage() {
     loadPatients()
   }, [])
 
-  const filteredTimeline = useMemo(() => {
-    if (!search.trim()) return prenatalTimeline
-    return prenatalTimeline.filter((item) =>
-      `${item.title} ${item.detail}`.toLowerCase().includes(search.toLowerCase())
-    )
-  }, [search])
-
-  const filteredPatientTimeline = useMemo(() => {
-    const base = activePatient ? patientRecord.prenatalTimeline : filteredTimeline
-    if (!search.trim()) return base
-    return base.filter((item) =>
-      `${item.title} ${item.detail}`.toLowerCase().includes(search.toLowerCase())
-    )
-  }, [activePatient, patientRecord, filteredTimeline, search])
-
   const activePatient = useMemo(() => {
     if (!selectedPatientId) return null
     return patients.find((patient) => patient.id === selectedPatientId) || null
@@ -315,6 +300,21 @@ export default function DoctorDashboardPage() {
       pregnancySummary: summary,
     }
   }, [activePatient])
+
+  const filteredTimeline = useMemo(() => {
+    if (!search.trim()) return prenatalTimeline
+    return prenatalTimeline.filter((item) =>
+      `${item.title} ${item.detail}`.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [search])
+
+  const filteredPatientTimeline = useMemo(() => {
+    const base = activePatient ? patientRecord.prenatalTimeline : filteredTimeline
+    if (!search.trim()) return base
+    return base.filter((item) =>
+      `${item.title} ${item.detail}`.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [activePatient, patientRecord, filteredTimeline, search])
 
   const selectedMetric = useMemo(
     () => growthMetrics.find((metric) => metric.id === activeMetricId) || growthMetrics[0],
