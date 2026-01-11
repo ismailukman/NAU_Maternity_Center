@@ -302,10 +302,9 @@ export default function AdminDashboard() {
   }, [admin])
 
   useEffect(() => {
-    if (!admin) return
     const interval = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(interval)
-  }, [admin])
+  }, [])
 
   useEffect(() => {
     if (!admin) return
