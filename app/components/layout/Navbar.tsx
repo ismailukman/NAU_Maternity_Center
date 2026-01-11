@@ -41,13 +41,13 @@ export default function Navbar() {
   return (
     <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm overflow-visible">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16 md:h-24 lg:h-28">
           {/* Logo - Responsive with scroll behavior */}
           <Link href="/" className="group relative z-10">
             <div
               className={`transition-all duration-700 ease-out ${
                 isScrolled
-                  ? 'w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14'
+                  ? 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24'
                   : 'w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-56 lg:h-56'
               }`}
               style={{
@@ -119,11 +119,11 @@ export default function Navbar() {
             className={`md:hidden p-3 rounded-full text-white bg-gradient-to-r from-maternal-primary to-maternal-secondary shadow-lg hover:shadow-2xl transition-all duration-500 ${
               isMenuOpen
                 ? 'translate-y-0 scale-100'
-                : '-translate-y-6 scale-110'
+                : 'translate-y-1 scale-110'
             }`}
             style={{
               position: 'relative',
-              top: isMenuOpen ? '0' : '-40%',
+              top: isMenuOpen ? '0' : '0%',
             }}
           >
             {isMenuOpen ? (
