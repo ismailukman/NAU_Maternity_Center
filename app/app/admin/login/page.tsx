@@ -12,6 +12,33 @@ import Image from 'next/image'
 import { auth, db } from '@/lib/firebase-config'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import { FirebaseError } from 'firebase/app'
+
+const getAuthErrorMessage = (error: unknown) => {
+  if (error instanceof FirebaseError) {
+    switch (error.code) {
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+        return 'Invalid email or password.'
+      case 'auth/invalid-email':
+        return 'Invalid email address.'
+      case 'auth/user-disabled':
+        return 'This account has been disabled.'
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please try again later.'
+      case 'auth/network-request-failed':
+        return 'Network error. Please check your connection.'
+      default:
+        return error.message || 'Authentication failed.'
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'An error occurred. Please try again.'
+}
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -50,8 +77,10 @@ export default function AdminLoginPage() {
       toast.success('Login successful!')
       router.push('/admin/dashboard')
     } catch (error) {
-      setError('An error occurred. Please try again.')
-      toast.error('An error occurred. Please try again.')
+      const message = getAuthErrorMessage(error)
+      console.error('Admin login failed:', error)
+      setError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
