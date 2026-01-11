@@ -837,7 +837,9 @@ export default function AdminDashboard() {
   }
 
   const handleCreateAppointment = async () => {
-    if (!appointmentForm.doctorId || !appointmentForm.appointmentDate || !appointmentForm.appointmentTime) {
+    const appointmentDate = appointmentForm.appointmentDate.trim()
+    const appointmentTime = appointmentForm.appointmentTime.trim()
+    if (!appointmentForm.doctorId || !appointmentDate || !appointmentTime) {
       toast.error('Please select a doctor, date, and time.')
       return
     }
@@ -845,10 +847,17 @@ export default function AdminDashboard() {
       toast.error('Please select an existing patient.')
       return
     }
-    if (
-      appointmentForm.patientType === 'new' &&
-      (!appointmentForm.patientFirstName.trim() || !appointmentForm.patientLastName.trim() || !appointmentForm.patientPhone.trim())
-    ) {
+    if (appointmentForm.patientType === 'new') {
+      if (!appointmentForm.patientFirstName.trim() || !appointmentForm.patientLastName.trim() || !appointmentForm.patientPhone.trim()) {
+        toast.error('Please enter the new patient details.')
+        return
+      }
+    }
+
+    if (!appointmentForm.reasonForVisit.trim()) {
+      toast.error('Please enter a reason for visit.')
+      return
+    }
       toast.error('Please enter the new patient details.')
       return
     }
@@ -859,7 +868,7 @@ export default function AdminDashboard() {
       return
     }
 
-    const timeInfo = parseTimeInput(appointmentForm.appointmentTime)
+    const timeInfo = parseTimeInput(appointmentTime)
     if (!timeInfo) {
       toast.error('Please use a valid time (e.g., 09:00 AM).')
       return
@@ -876,7 +885,7 @@ export default function AdminDashboard() {
         return
       }
 
-      const appointmentDay = new Date(appointmentForm.appointmentDate).toLocaleDateString('en-US', { weekday: 'long' })
+      const appointmentDay = new Date(appointmentDate).toLocaleDateString('en-US', { weekday: 'long' })
       if (
         availability.length > 0 &&
         !availability.some((day: string) => day.toLowerCase() === appointmentDay.toLowerCase())
@@ -891,7 +900,7 @@ export default function AdminDashboard() {
       }
 
       const dateSnapshot = await getDocs(
-        query(collection(db, 'appointments'), where('appointmentDate', '==', appointmentForm.appointmentDate))
+        query(collection(db, 'appointments'), where('appointmentDate', '==', appointmentDate))
       )
 
       const timeConflicts = dateSnapshot.docs
@@ -988,14 +997,14 @@ export default function AdminDashboard() {
         return
       }
 
-      const appointmentNumber = `APT-${appointmentForm.appointmentDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
+      const appointmentNumber = `APT-${appointmentDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
       const appointmentType = appointmentForm.appointmentType.trim() || selectedDoctor.specialization || 'General Consultation'
       const patientName = `${patientFirstName} ${patientLastName}`.trim()
 
       await addDoc(collection(db, 'appointments'), {
         appointmentNumber,
         appointmentType,
-        appointmentDate: appointmentForm.appointmentDate,
+        appointmentDate,
         appointmentTime: timeInfo.label,
         status: 'SCHEDULED',
         checkedIn: false,
@@ -1015,7 +1024,7 @@ export default function AdminDashboard() {
       })
 
       await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
-        bookedSlots: arrayUnion(`${appointmentForm.appointmentDate}|${timeInfo.label}`),
+        bookedSlots: arrayUnion(`${appointmentDate}|${timeInfo.label}`),
       })
 
       toast.success('Appointment created successfully')
@@ -2068,7 +2077,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Reason for Visit</Label>
+              <Label>Reason for Visit *</Label>
               <Textarea
                 value={appointmentForm.reasonForVisit}
                 onChange={(e) =>
