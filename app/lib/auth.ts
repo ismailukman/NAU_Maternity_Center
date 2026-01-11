@@ -32,7 +32,7 @@ export async function createToken(admin: AdminSession): Promise<string> {
 export async function verifyToken(token: string): Promise<AdminSession | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as AdminSession
+    return payload as unknown as AdminSession
   } catch (error) {
     return null
   }
