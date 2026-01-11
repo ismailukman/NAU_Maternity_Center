@@ -1,21 +1,20 @@
 {
   "hosting": {
-    "public": ".next/static",
+    "public": "out",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "cleanUrls": true,
     "rewrites": [
       {
         "source": "**",
-        "function": "nextjsServer"
+        "destination": "/index.html"
       }
     ]
   },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs20"
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

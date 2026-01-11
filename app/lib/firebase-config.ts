@@ -1,5 +1,7 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -12,8 +14,12 @@ const firebaseConfig = {
   measurementId: "G-7QXF454WNX"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+// Initialize Firebase (only once)
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-export { app, analytics };
+// Initialize services
+const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+export { app, analytics, db, auth };
