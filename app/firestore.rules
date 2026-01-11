@@ -41,5 +41,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // Queue counters - admins can read/write
+    match /queueCounters/{counterId} {
+      allow read, write: if isAdmin();
+    }
   }
 }
