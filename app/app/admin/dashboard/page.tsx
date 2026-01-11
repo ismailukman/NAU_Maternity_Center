@@ -201,6 +201,12 @@ const parseSpecialties = (value: string | string[]) => {
     .filter(Boolean)
 }
 
+const parseLanguages = (value: string | string[]) =>
+  (Array.isArray(value) ? value : String(value || '').split(','))
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+
 const parseTimeToMinutes = (value: string) => {
   const trimmed = value.trim().toUpperCase()
   const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/)
@@ -748,7 +754,7 @@ export default function AdminDashboard() {
           consultationDuration: data.consultationDuration || 30,
           workingHours: data.workingHours || '09:00 AM - 05:00 PM',
           fee: data.fee || 15000,
-          languages: Array.isArray(data.languages) ? data.languages : [],
+          languages: parseLanguages(data.languages || []),
           bio: data.bio || '',
           email: data.email || '',
           phone: data.phone || '',
@@ -853,10 +859,7 @@ export default function AdminDashboard() {
         consultationDuration: Number(doctorForm.consultationDuration) || 30,
         workingHours: doctorForm.workingHours.trim(),
         fee: Number(doctorForm.fee) || 0,
-        languages: doctorForm.languages
-          .split(',')
-          .map((lang) => lang.trim())
-          .filter(Boolean),
+        languages: parseLanguages(doctorForm.languages),
         bio: doctorForm.bio.trim(),
         email: doctorForm.email.trim(),
         phone: doctorForm.phone.trim(),
@@ -2042,6 +2045,7 @@ export default function AdminDashboard() {
                 <datalist id="doctor-languages-list">
                   <option value="English" />
                   <option value="Hausa" />
+                  <option value="Igala" />
                   <option value="Igbo" />
                   <option value="Yoruba" />
                   <option value="Fulani" />
