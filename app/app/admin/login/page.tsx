@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -97,7 +98,7 @@ export default function AdminLoginPage() {
       <div className="relative z-10 w-full max-w-md px-4">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <div className="relative w-32 h-32 animate-float-logo">
+          <Link href="/" className="relative w-32 h-32 animate-float-logo">
             <Image
               src="/logo.png"
               alt="Hospital Logo"
@@ -107,7 +108,7 @@ export default function AdminLoginPage() {
                 filter: 'drop-shadow(0 10px 20px rgba(233, 30, 99, 0.3))',
               }}
             />
-          </div>
+          </Link>
         </div>
 
         <Card className="border-2 border-maternal-primary/20 shadow-2xl backdrop-blur-sm bg-white/95">

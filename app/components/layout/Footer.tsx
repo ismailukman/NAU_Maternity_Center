@@ -106,6 +106,14 @@ export default function Footer() {
 
         {/* Bottom Bar */}
         <div className="border-t border-gray-800 mt-6 sm:mt-8 pt-6 sm:pt-8 text-center text-xs sm:text-sm">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+            <Link
+              href="/admin/login"
+              className="inline-flex items-center justify-center rounded-full border border-maternal-primary/60 px-4 py-2 text-xs sm:text-sm font-semibold text-maternal-primary hover:bg-maternal-primary hover:text-white transition-colors"
+            >
+              Admin Portal
+            </Link>
+          </div>
           <p>&copy; {new Date().getFullYear()} Natasha Akpoti-Uduaghan Maternity Centre. All rights reserved.</p>
           <p className="mt-2">
             <Link href="/privacy" className="hover:text-maternal-primary transition-colors">
