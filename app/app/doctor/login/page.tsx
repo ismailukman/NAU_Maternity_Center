@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 
 const DEMO_EMAIL = 'onimisi@@naumaternity.com'
 const DEMO_PASSWORD = 'Onimisi@54321'
+const ALT_DEMO_EMAIL = 'onimisi@naumaternity.com'
 
 export default function DoctorLoginPage() {
   const router = useRouter()
@@ -21,7 +22,11 @@ export default function DoctorLoginPage() {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (email.trim() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+    const normalizedEmail = email.trim().toLowerCase()
+    if (
+      (normalizedEmail === DEMO_EMAIL.toLowerCase() || normalizedEmail === ALT_DEMO_EMAIL) &&
+      password === DEMO_PASSWORD
+    ) {
       toast.success('Welcome, Prof. Dr. Onimisi Okene')
       router.push('/doctor/dashboard')
       return
@@ -85,7 +90,7 @@ export default function DoctorLoginPage() {
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button type="submit" className="maternal-gradient w-full">
-                  Enter Doctor Workspace
+                  Doctor Loging
                 </Button>
                 <Button type="button" variant="outline" onClick={handleDemoFill} className="w-full">
                   Use Demo Login
