@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -5,8 +8,43 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Star, Award, Calendar, Languages, Clock } from 'lucide-react'
 import Link from 'next/link'
+import { db } from '@/lib/firebase-config'
+import { collection, getDocs, query } from 'firebase/firestore'
 
 export default function DoctorsPage() {
+  const [doctorList, setDoctorList] = useState(doctors)
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const snapshot = await getDocs(query(collection(db, 'doctors')))
+        if (snapshot.empty) return
+        const mapped = snapshot.docs.map((docSnapshot) => {
+          const data = docSnapshot.data()
+          const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+          return {
+            id: docSnapshot.id,
+            name: name || `Dr. ${docSnapshot.id}`,
+            qualification: data.qualification || '',
+            specialization: data.specialization || data.specialty || 'General Consultation',
+            rating: data.rating || 4.7,
+            reviews: data.reviews || 0,
+            experience: data.experience || '',
+            languages: Array.isArray(data.languages) ? data.languages : [],
+            consultationDuration: data.consultationDuration || 30,
+            fee: data.fee || 15000,
+            bio: data.bio || 'Experienced specialist providing compassionate care.',
+          }
+        })
+        setDoctorList(mapped)
+      } catch (error) {
+        console.error('Failed to load doctors:', error)
+      }
+    }
+
+    loadDoctors()
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -43,7 +81,7 @@ export default function DoctorsPage() {
         <section className="py-12 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {doctors.map((doctor) => (
+              {doctorList.map((doctor) => (
                 <Card key={doctor.id} className="hover:shadow-xl transition-shadow">
                   <CardHeader className="text-center">
                     <div className="mb-4">
