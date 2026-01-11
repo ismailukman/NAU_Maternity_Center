@@ -812,12 +812,10 @@ export default function AdminDashboard() {
       const doctorsSnapshot = await getDocs(query(collection(db, 'doctors')))
       const appointmentsSnapshot = await getDocs(query(collection(db, 'appointments')))
 
-      const appointmentsData = appointmentsSnapshot.docs
-        .map((docSnapshot) => ({
-          id: docSnapshot.id,
-          data: docSnapshot.data(),
-        }))
-        .filter(({ data }) => toDateKey(data.appointmentDate) === todayString)
+      const appointmentsData = appointmentsSnapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        data: docSnapshot.data(),
+      }))
 
       const schedules = doctorsSnapshot.docs.map((docSnapshot) => {
         const doctorData = docSnapshot.data()
@@ -834,11 +832,16 @@ export default function AdminDashboard() {
             id,
             appointmentNumber: data.appointmentNumber || id,
             patientName: buildAppointmentPatientName(data),
+            date: toDateKey(data.appointmentDate),
             time: data.appointmentTime || data.timeSlot || '',
             status: data.status || 'PENDING',
             type: data.appointmentType || data.specialty || data.service || 'General Consultation',
           }))
-          .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+          .sort((a, b) => {
+            const dateCompare = (a.date || '').localeCompare(b.date || '')
+            if (dateCompare !== 0) return dateCompare
+            return (a.time || '').localeCompare(b.time || '')
+          })
 
         const totalSlots = parseWorkingHours(
           doctorData.workingHours || '09:00 AM - 05:00 PM',
@@ -2163,7 +2166,7 @@ export default function AdminDashboard() {
                                 >
                                   <div className="flex items-center gap-4">
                                     <span className="font-mono text-sm font-semibold text-maternal-primary">
-                                      {apt.time}
+                                      {apt.date ? `${apt.date} • ${apt.time}` : apt.time}
                                     </span>
                                     <span className="text-gray-900">{apt.patientName}</span>
                                     <span className="text-sm text-gray-600">{apt.type}</span>
