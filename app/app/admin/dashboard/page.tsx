@@ -2034,10 +2034,19 @@ export default function AdminDashboard() {
                 <Label htmlFor="doctor-languages">Languages</Label>
                 <Input
                   id="doctor-languages"
+                  list="doctor-languages-list"
                   value={doctorForm.languages}
                   onChange={(e) => setDoctorForm({ ...doctorForm, languages: e.target.value })}
-                  placeholder="English, Hausa"
+                  placeholder="English, Hausa, Ebira"
                 />
+                <datalist id="doctor-languages-list">
+                  <option value="English" />
+                  <option value="Hausa" />
+                  <option value="Igbo" />
+                  <option value="Yoruba" />
+                  <option value="Fulani" />
+                  <option value="Ebira" />
+                </datalist>
               </div>
               <div>
                 <Label htmlFor="doctor-email">Email</Label>
