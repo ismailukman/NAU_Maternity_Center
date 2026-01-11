@@ -274,6 +274,10 @@ async function createAdminViaFirebase() {
     }
 
     console.log('\nStep 3: Adding sample doctors...');
+    const existingDoctors = await listDoctors(idToken);
+    if (existingDoctors.length > 0) {
+      console.log(`ℹ️  Found ${existingDoctors.length} doctors. Skipping doctor creation.`);
+    } else {
 
     const doctors = [
       {
@@ -418,41 +422,42 @@ async function createAdminViaFirebase() {
       }
     ];
 
-    for (const doctor of doctors) {
-      const docOptions = {
-        hostname: 'firestore.googleapis.com',
-        path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents/doctors`,
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        }
-      };
+      for (const doctor of doctors) {
+        const docOptions = {
+          hostname: 'firestore.googleapis.com',
+          path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents/doctors`,
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          }
+        };
 
-      const doctorDoc = {
-        fields: {
-          name: { stringValue: doctor.name },
-          specialization: { stringValue: doctor.specialization },
-          specialty: { stringValue: doctor.specialization },
-          qualification: { stringValue: doctor.qualification },
-          experience: { stringValue: doctor.experience },
-          availability: { arrayValue: { values: doctor.availability.map(d => ({ stringValue: d })) } },
-          bio: { stringValue: doctor.bio },
-          consultationDuration: { integerValue: String(doctor.consultationDuration) },
-          workingHours: { stringValue: doctor.workingHours },
-          rating: { doubleValue: doctor.rating },
-          reviews: { integerValue: String(doctor.reviews) },
-          fee: { integerValue: String(doctor.fee) },
-          languages: { arrayValue: { values: doctor.languages.map(lang => ({ stringValue: lang })) } },
-          createdAt: { timestampValue: new Date().toISOString() }
-        }
-      };
+        const doctorDoc = {
+          fields: {
+            name: { stringValue: doctor.name },
+            specialization: { stringValue: doctor.specialization },
+            specialty: { stringValue: doctor.specialization },
+            qualification: { stringValue: doctor.qualification },
+            experience: { stringValue: doctor.experience },
+            availability: { arrayValue: { values: doctor.availability.map(d => ({ stringValue: d })) } },
+            bio: { stringValue: doctor.bio },
+            consultationDuration: { integerValue: String(doctor.consultationDuration) },
+            workingHours: { stringValue: doctor.workingHours },
+            rating: { doubleValue: doctor.rating },
+            reviews: { integerValue: String(doctor.reviews) },
+            fee: { integerValue: String(doctor.fee) },
+            languages: { arrayValue: { values: doctor.languages.map(lang => ({ stringValue: lang })) } },
+            createdAt: { timestampValue: new Date().toISOString() }
+          }
+        };
 
-      const result = await makeRequest(docOptions, doctorDoc);
-      if (result.status === 200 || result.status === 201) {
-        console.log('✅ Created doctor:', doctor.name);
-      } else {
-        console.log('⚠️  Failed to create doctor:', doctor.name);
+        const result = await makeRequest(docOptions, doctorDoc);
+        if (result.status === 200 || result.status === 201) {
+          console.log('✅ Created doctor:', doctor.name);
+        } else {
+          console.log('⚠️  Failed to create doctor:', doctor.name);
+        }
       }
     }
 
