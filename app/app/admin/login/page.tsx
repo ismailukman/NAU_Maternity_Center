@@ -66,6 +66,13 @@ export default function AdminLoginPage() {
         return
       }
 
+      if (adminData.isActive === false) {
+        await signOut(auth)
+        setError('Your admin access has been disabled.')
+        toast.error('Your admin access has been disabled.')
+        return
+      }
+
       toast.success('Login successful!')
       router.push('/admin/dashboard')
     } catch (error) {

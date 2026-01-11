@@ -30,11 +30,13 @@ import {
   UserCheck,
   ClipboardCheck,
   Stethoscope,
+  Shield,
   Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { auth, db } from '@/lib/firebase-config'
-import { onAuthStateChanged, signOut } from 'firebase/auth'
+import { app, auth, db } from '@/lib/firebase-config'
+import { initializeApp, deleteApp } from 'firebase/app'
+import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   onSnapshot,
   collection,
@@ -47,6 +49,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   arrayUnion,
@@ -74,6 +77,16 @@ interface Admin {
   firstName: string
   lastName: string
   role: string
+}
+
+interface AdminRecord {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  phone: string
+  role: string
+  isActive: boolean
 }
 
 interface Appointment {
@@ -385,6 +398,16 @@ export default function AdminDashboard() {
   const [appointmentSpecialties, setAppointmentSpecialties] = useState<string[]>([])
   const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
   const [editingPatient, setEditingPatient] = useState<PatientProfile | null>(null)
+  const [adminList, setAdminList] = useState<AdminRecord[]>([])
+  const [showAdminDialog, setShowAdminDialog] = useState(false)
+  const [isSavingAdmin, setIsSavingAdmin] = useState(false)
+  const [adminForm, setAdminForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: '',
+  })
   const [doctorForm, setDoctorForm] = useState({
     name: '',
     specialization: '',
@@ -423,6 +446,7 @@ export default function AdminDashboard() {
     symptoms: '',
   })
   const todayString = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const isSuperAdmin = admin?.role === 'super_admin' || admin?.email === 'admin@naumaternity.com'
 
   // Check authentication
   useEffect(() => {
@@ -439,6 +463,14 @@ export default function AdminDashboard() {
 
         if (!adminData) {
           await signOut(auth)
+          router.push('/admin/login')
+          setLoading(false)
+          return
+        }
+
+        if (adminData.isActive === false) {
+          await signOut(auth)
+          toast.error('Admin access has been disabled.')
           router.push('/admin/login')
           setLoading(false)
           return
@@ -470,6 +502,11 @@ export default function AdminDashboard() {
     fetchDoctorsList()
     fetchPatientsList()
   }, [admin])
+
+  useEffect(() => {
+    if (!admin || !isSuperAdmin) return
+    fetchAdmins()
+  }, [admin, isSuperAdmin])
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000)
@@ -926,6 +963,122 @@ export default function AdminDashboard() {
       setPatients(mapped)
     } catch (error) {
       console.error('Failed to load patients:', error)
+    }
+  }
+
+  const fetchAdmins = async () => {
+    try {
+      const snapshot = await getDocs(query(collection(db, 'admins')))
+      const mapped = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data()
+        return {
+          id: docSnapshot.id,
+          email: data.email || '',
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          phone: data.phone || '',
+          role: data.role || 'admin',
+          isActive: data.isActive !== false,
+        } as AdminRecord
+      })
+      mapped.sort((a, b) => {
+        const roleCompare = (a.role || '').localeCompare(b.role || '')
+        if (roleCompare !== 0) return roleCompare
+        return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+      })
+      setAdminList(mapped)
+    } catch (error) {
+      console.error('Failed to load admins:', error)
+    }
+  }
+
+  const openAddAdmin = () => {
+    setAdminForm({ firstName: '', lastName: '', email: '', phone: '', password: '' })
+    setShowAdminDialog(true)
+  }
+
+  const handleCreateAdmin = async () => {
+    if (!isSuperAdmin) {
+      toast.error('Only super admins can create new admins.')
+      return
+    }
+
+    const email = adminForm.email.trim()
+    const password = adminForm.password.trim()
+    if (!adminForm.firstName.trim() || !adminForm.lastName.trim() || !email || !password) {
+      toast.error('Please fill in all required fields.')
+      return
+    }
+
+    let secondaryApp
+    try {
+      setIsSavingAdmin(true)
+      secondaryApp = initializeApp(app.options, `adminCreator-${Date.now()}`)
+      const secondaryAuth = getAuth(secondaryApp)
+      const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password)
+      await setDoc(doc(db, 'admins', credential.user.uid), {
+        email,
+        firstName: adminForm.firstName.trim(),
+        lastName: adminForm.lastName.trim(),
+        phone: adminForm.phone.trim(),
+        role: 'admin',
+        isActive: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      await signOut(secondaryAuth)
+      toast.success('Admin created successfully')
+      setShowAdminDialog(false)
+      fetchAdmins()
+    } catch (error) {
+      console.error('Failed to create admin:', error)
+      toast.error('Unable to create admin. Please try again.')
+    } finally {
+      setIsSavingAdmin(false)
+      if (secondaryApp) {
+        await deleteApp(secondaryApp)
+      }
+    }
+  }
+
+  const handleToggleAdminStatus = async (record: AdminRecord) => {
+    if (!isSuperAdmin) {
+      toast.error('Only super admins can update admin status.')
+      return
+    }
+    if (record.id === admin?.id) {
+      toast.error('You cannot deactivate your own account.')
+      return
+    }
+
+    try {
+      await updateDoc(doc(db, 'admins', record.id), {
+        isActive: !record.isActive,
+        updatedAt: serverTimestamp(),
+      })
+      toast.success(`Admin ${record.isActive ? 'deactivated' : 'activated'}`)
+      fetchAdmins()
+    } catch (error) {
+      toast.error('Unable to update admin status.')
+    }
+  }
+
+  const handleDeleteAdmin = async (record: AdminRecord) => {
+    if (!isSuperAdmin) {
+      toast.error('Only super admins can delete admins.')
+      return
+    }
+    if (record.id === admin?.id) {
+      toast.error('You cannot delete your own account.')
+      return
+    }
+    if (!confirm(`Delete admin ${record.firstName} ${record.lastName}?`)) return
+    try {
+      await deleteDoc(doc(db, 'admins', record.id))
+      toast.success('Admin deleted')
+      fetchAdmins()
+    } catch (error) {
+      toast.error('Unable to delete admin.')
     }
   }
 
@@ -1882,7 +2035,11 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-2 sm:grid-cols-4">
+          <TabsList
+            className={`grid w-full max-w-2xl grid-cols-2 ${
+              isSuperAdmin ? 'sm:grid-cols-5' : 'sm:grid-cols-4'
+            }`}
+          >
             <TabsTrigger value="appointments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <ClipboardCheck className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Appointments</span>
@@ -1899,6 +2056,12 @@ export default function AdminDashboard() {
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Patients</span>
             </TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger value="admins" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Admins</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Appointments Tab */}
@@ -2350,8 +2513,162 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Admins Management Tab */}
+          {isSuperAdmin && (
+            <TabsContent value="admins">
+              <Card className="border-2 border-gray-100 shadow-lg">
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl">Admin Users</CardTitle>
+                    <CardDescription>
+                      Create and manage admins. Admins cannot create other admins.
+                    </CardDescription>
+                  </div>
+                  <Button onClick={openAddAdmin} className="maternal-gradient">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Admin
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {adminList.map((record) => {
+                      const isSelf = record.id === admin?.id
+                      const isSuper = record.role === 'super_admin'
+                      return (
+                        <div
+                          key={record.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-gray-200 rounded-lg p-4 bg-white"
+                        >
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {record.firstName} {record.lastName}
+                            </p>
+                            <p className="text-sm text-gray-600">{record.email}</p>
+                            {record.phone && <p className="text-xs text-gray-500">{record.phone}</p>}
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge className="bg-maternal-light text-maternal-primary">
+                                {record.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                              </Badge>
+                              <Badge
+                                className={`border ${
+                                  record.isActive
+                                    ? 'bg-green-100 text-green-800 border-green-300'
+                                    : 'bg-red-100 text-red-800 border-red-300'
+                                }`}
+                              >
+                                {record.isActive ? 'Active' : 'Disabled'}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                              onClick={() => handleToggleAdminStatus(record)}
+                              disabled={isSelf || isSuper}
+                            >
+                              {record.isActive ? 'Deactivate' : 'Activate'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-300 text-red-600 hover:bg-red-50"
+                              onClick={() => handleDeleteAdmin(record)}
+                              disabled={isSelf || isSuper}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    {adminList.length === 0 && (
+                      <div className="text-center py-12">
+                        <Shield className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-600">No admins found</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </main>
+
+      {/* Admin Dialog */}
+      <Dialog open={showAdminDialog} onOpenChange={setShowAdminDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Add Admin</DialogTitle>
+            <DialogDescription>Create a new admin with standard admin privileges.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="admin-first-name">First Name</Label>
+                <Input
+                  id="admin-first-name"
+                  value={adminForm.firstName}
+                  onChange={(e) => setAdminForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="Jane"
+                />
+              </div>
+              <div>
+                <Label htmlFor="admin-last-name">Last Name</Label>
+                <Input
+                  id="admin-last-name"
+                  value={adminForm.lastName}
+                  onChange={(e) => setAdminForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="admin-email">Email</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={adminForm.email}
+                onChange={(e) => setAdminForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="admin@naumaternity.com"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="admin-phone">Phone</Label>
+                <Input
+                  id="admin-phone"
+                  value={adminForm.phone}
+                  onChange={(e) => setAdminForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="+234 801 555 0000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="admin-password">Temporary Password</Label>
+                <Input
+                  id="admin-password"
+                  type="password"
+                  value={adminForm.password}
+                  onChange={(e) => setAdminForm((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="Min 6 characters"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <Button variant="outline" onClick={() => setShowAdminDialog(false)}>
+                Cancel
+              </Button>
+              <Button className="maternal-gradient" onClick={handleCreateAdmin} disabled={isSavingAdmin}>
+                {isSavingAdmin ? 'Creating...' : 'Create Admin'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Doctor Dialog */}
       <Dialog open={showDoctorDialog} onOpenChange={setShowDoctorDialog}>

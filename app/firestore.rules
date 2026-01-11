@@ -8,19 +8,27 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return isAuthenticated() &&
-             get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    // Helper function to check if user is super admin
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin' ||
+        request.auth.token.email == 'admin@naumaternity.com'
+      );
     }
 
-    // Admins collection - allow signed-in users to read their own admin record
+    // Helper function to check if user is admin (admin or super admin)
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['admin', 'super_admin'] ||
+        isSuperAdmin()
+      );
+    }
+
+    // Admins collection - only super admins can manage admins, admins can read their own record
     match /admins/{adminId} {
-      allow read: if isAuthenticated() && request.auth.uid == adminId;
-      allow create: if isAuthenticated()
-                    && request.auth.uid == adminId
-                    && !exists(/databases/$(database)/documents/admins/$(adminId));
-      allow write: if isAdmin();
+      allow read: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == adminId);
+      allow create: if isSuperAdmin();
+      allow update, delete: if isSuperAdmin();
     }
 
     // Patients collection - admins can read/write, users can read their own
