@@ -858,9 +858,6 @@ export default function AdminDashboard() {
       toast.error('Please enter a reason for visit.')
       return
     }
-      toast.error('Please enter the new patient details.')
-      return
-    }
 
     const selectedDoctor = doctors.find((doctor) => doctor.id === appointmentForm.doctorId)
     if (!selectedDoctor) {
