@@ -118,18 +118,26 @@ export default function DoctorLoginPage() {
               <p className="text-sm uppercase tracking-wide text-white/70">Doctor</p>
               <p className="text-lg font-semibold">Prof. Dr. Onimisi Okene</p>
             </div>
-            <div className="rounded-xl bg-white/10 border border-white/20 p-4 space-y-2">
+            <div className="rounded-xl bg-white/10 border border-white/20 p-4 space-y-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-white/70">Email</p>
-                <p className="font-mono text-sm">{DEMO_EMAIL}</p>
+                <p className="text-xs uppercase tracking-wide text-white/70">Qualifications</p>
+                <p className="text-sm font-semibold">MBBS, FWACS, FMCOG</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-white/70">Password</p>
-                <p className="font-mono text-sm">{DEMO_PASSWORD}</p>
+                <p className="text-xs uppercase tracking-wide text-white/70">Specialty</p>
+                <p className="text-sm font-semibold">Obstetrics & Gynecology</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-white/70">Experience</p>
+                <p className="text-sm font-semibold">18+ years in maternal-fetal medicine</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-white/70">Awards</p>
+                <p className="text-sm font-semibold">Kogi Maternal Health Excellence Award (2024)</p>
               </div>
             </div>
             <p className="text-sm text-white/80">
-              This portal showcases prenatal to postnatal records, vitals trends, lab results, and postpartum tracking.
+              This workspace tracks prenatal, postnatal, and postpartum records with lab insights and care plans.
             </p>
           </CardContent>
         </Card>
