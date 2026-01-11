@@ -145,6 +145,19 @@ export default function BookAppointmentPage() {
 
     setSubmitting(true)
     try {
+      const existingQuery = query(
+        collection(db, 'appointments'),
+        where('doctorId', '==', selectedDoctor.id),
+        where('appointmentDate', '==', formData.date),
+        where('appointmentTime', '==', formData.timeSlot)
+      )
+      const existingSnapshot = await getDocs(existingQuery)
+      if (!existingSnapshot.empty) {
+        toast.error('This time slot is already booked. Please choose another.')
+        setSubmitting(false)
+        return
+      }
+
       const patientNameParts = formData.patientName.trim().split(/\s+/)
       const patientFirstName = patientNameParts[0] || ''
       const patientLastName = patientNameParts.slice(1).join(' ')

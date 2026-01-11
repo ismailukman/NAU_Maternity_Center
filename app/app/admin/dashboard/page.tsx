@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -29,12 +30,14 @@ import {
   UserCheck,
   ClipboardCheck,
   Stethoscope,
+  Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { auth, db } from '@/lib/firebase-config'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   collection,
+  addDoc,
   deleteDoc,
   doc,
   getCountFromServer,
@@ -128,6 +131,29 @@ interface DoctorSchedule {
   }
 }
 
+interface DoctorProfile {
+  id: string
+  name: string
+  specialization: string
+  qualification: string
+  experience: string
+  consultationDuration: number
+  workingHours: string
+  fee: number
+  languages: string[]
+  bio: string
+  email: string
+  phone: string
+}
+
+interface PatientProfile {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+}
+
 const buildNameParts = (fullName?: string) => {
   if (!fullName) return { firstName: '', lastName: '' }
   const parts = fullName.trim().split(/\s+/)
@@ -177,6 +203,8 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>([])
+  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  const [patients, setPatients] = useState<PatientProfile[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -186,6 +214,29 @@ export default function AdminDashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const [activeTab, setActiveTab] = useState('appointments')
+  const [showDoctorDialog, setShowDoctorDialog] = useState(false)
+  const [showPatientDialog, setShowPatientDialog] = useState(false)
+  const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
+  const [editingPatient, setEditingPatient] = useState<PatientProfile | null>(null)
+  const [doctorForm, setDoctorForm] = useState({
+    name: '',
+    specialization: '',
+    qualification: '',
+    experience: '',
+    consultationDuration: 30,
+    workingHours: '09:00 AM - 05:00 PM',
+    fee: 15000,
+    languages: '',
+    bio: '',
+    email: '',
+    phone: '',
+  })
+  const [patientForm, setPatientForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+  })
   const todayString = useMemo(() => new Date().toISOString().split('T')[0], [])
 
   // Check authentication
@@ -231,6 +282,8 @@ export default function AdminDashboard() {
     fetchAppointments()
     markMissedAppointments()
     fetchDoctorSchedules()
+    fetchDoctorsList()
+    fetchPatientsList()
   }, [admin])
 
   useEffect(() => {
@@ -440,6 +493,192 @@ export default function AdminDashboard() {
     }
   }
 
+  const fetchDoctorsList = async () => {
+    try {
+      const snapshot = await getDocs(query(collection(db, 'doctors')))
+      const mapped = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data()
+        return {
+          id: docSnapshot.id,
+          name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+          specialization: data.specialization || data.specialty || '',
+          qualification: data.qualification || '',
+          experience: data.experience || '',
+          consultationDuration: data.consultationDuration || 30,
+          workingHours: data.workingHours || '09:00 AM - 05:00 PM',
+          fee: data.fee || 15000,
+          languages: Array.isArray(data.languages) ? data.languages : [],
+          bio: data.bio || '',
+          email: data.email || '',
+          phone: data.phone || '',
+        } as DoctorProfile
+      })
+      setDoctors(mapped)
+    } catch (error) {
+      console.error('Failed to load doctors:', error)
+    }
+  }
+
+  const fetchPatientsList = async () => {
+    try {
+      const snapshot = await getDocs(query(collection(db, 'patients')))
+      const mapped = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data()
+        return {
+          id: docSnapshot.id,
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+        } as PatientProfile
+      })
+      setPatients(mapped)
+    } catch (error) {
+      console.error('Failed to load patients:', error)
+    }
+  }
+
+  const openAddDoctor = () => {
+    setEditingDoctor(null)
+    setDoctorForm({
+      name: '',
+      specialization: '',
+      qualification: '',
+      experience: '',
+      consultationDuration: 30,
+      workingHours: '09:00 AM - 05:00 PM',
+      fee: 15000,
+      languages: '',
+      bio: '',
+      email: '',
+      phone: '',
+    })
+    setShowDoctorDialog(true)
+  }
+
+  const openEditDoctor = (doctor: DoctorProfile) => {
+    setEditingDoctor(doctor)
+    setDoctorForm({
+      name: doctor.name,
+      specialization: doctor.specialization,
+      qualification: doctor.qualification,
+      experience: doctor.experience,
+      consultationDuration: doctor.consultationDuration,
+      workingHours: doctor.workingHours,
+      fee: doctor.fee,
+      languages: doctor.languages.join(', '),
+      bio: doctor.bio,
+      email: doctor.email,
+      phone: doctor.phone,
+    })
+    setShowDoctorDialog(true)
+  }
+
+  const handleSaveDoctor = async () => {
+    try {
+      const payload = {
+        name: doctorForm.name.trim(),
+        specialization: doctorForm.specialization.trim(),
+        specialty: doctorForm.specialization.trim(),
+        qualification: doctorForm.qualification.trim(),
+        experience: doctorForm.experience.trim(),
+        consultationDuration: Number(doctorForm.consultationDuration) || 30,
+        workingHours: doctorForm.workingHours.trim(),
+        fee: Number(doctorForm.fee) || 0,
+        languages: doctorForm.languages
+          .split(',')
+          .map((lang) => lang.trim())
+          .filter(Boolean),
+        bio: doctorForm.bio.trim(),
+        email: doctorForm.email.trim(),
+        phone: doctorForm.phone.trim(),
+      }
+
+      if (editingDoctor) {
+        await updateDoc(doc(db, 'doctors', editingDoctor.id), payload)
+        toast.success('Doctor updated successfully')
+      } else {
+        await addDoc(collection(db, 'doctors'), payload)
+        toast.success('Doctor created successfully')
+      }
+      setShowDoctorDialog(false)
+      fetchDoctorsList()
+      fetchDoctorSchedules()
+    } catch (error) {
+      toast.error('Unable to save doctor')
+    }
+  }
+
+  const handleDeleteDoctor = async (doctorId: string) => {
+    if (!confirm('Are you sure you want to delete this doctor?')) return
+    try {
+      await deleteDoc(doc(db, 'doctors', doctorId))
+      toast.success('Doctor deleted')
+      fetchDoctorsList()
+      fetchDoctorSchedules()
+    } catch (error) {
+      toast.error('Unable to delete doctor')
+    }
+  }
+
+  const openAddPatient = () => {
+    setEditingPatient(null)
+    setPatientForm({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+    })
+    setShowPatientDialog(true)
+  }
+
+  const openEditPatient = (patient: PatientProfile) => {
+    setEditingPatient(patient)
+    setPatientForm({
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      email: patient.email,
+      phone: patient.phone,
+    })
+    setShowPatientDialog(true)
+  }
+
+  const handleSavePatient = async () => {
+    try {
+      const payload = {
+        firstName: patientForm.firstName.trim(),
+        lastName: patientForm.lastName.trim(),
+        email: patientForm.email.trim(),
+        phone: patientForm.phone.trim(),
+      }
+
+      if (editingPatient) {
+        await updateDoc(doc(db, 'patients', editingPatient.id), payload)
+        toast.success('Patient updated successfully')
+      } else {
+        await addDoc(collection(db, 'patients'), payload)
+        toast.success('Patient created successfully')
+      }
+      setShowPatientDialog(false)
+      fetchPatientsList()
+      fetchStats()
+    } catch (error) {
+      toast.error('Unable to save patient')
+    }
+  }
+
+  const handleDeletePatient = async (patientId: string) => {
+    if (!confirm('Are you sure you want to delete this patient?')) return
+    try {
+      await deleteDoc(doc(db, 'patients', patientId))
+      toast.success('Patient deleted')
+      fetchPatientsList()
+      fetchStats()
+    } catch (error) {
+      toast.error('Unable to delete patient')
+    }
+  }
+
   const handleLogout = async () => {
     try {
       await signOut(auth)
@@ -644,16 +883,26 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-2xl grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="appointments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <ClipboardCheck className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden xs:inline">Appointments</span>
               <span className="xs:hidden">Appts</span>
             </TabsTrigger>
+            <TabsTrigger value="schedules" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Schedules</span>
+              <span className="xs:hidden">Sched</span>
+            </TabsTrigger>
             <TabsTrigger value="doctors" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Doctor Schedules</span>
-              <span className="xs:hidden">Doctors</span>
+              <span className="hidden xs:inline">Doctors</span>
+              <span className="xs:hidden">Docs</span>
+            </TabsTrigger>
+            <TabsTrigger value="patients" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Patients</span>
+              <span className="xs:hidden">Pts</span>
             </TabsTrigger>
           </TabsList>
 
@@ -840,7 +1089,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {/* Doctor Schedules Tab */}
-          <TabsContent value="doctors">
+          <TabsContent value="schedules">
             <div className="space-y-4">
               <Card className="border-2 border-gray-100 shadow-lg">
                 <CardHeader>
@@ -908,8 +1157,301 @@ export default function AdminDashboard() {
               </Card>
             </div>
           </TabsContent>
+
+          {/* Doctors Management Tab */}
+          <TabsContent value="doctors">
+            <Card className="border-2 border-gray-100 shadow-lg">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl">Doctors Directory</CardTitle>
+                  <CardDescription>Create, update, or remove doctor profiles</CardDescription>
+                </div>
+                <Button onClick={openAddDoctor} className="maternal-gradient">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Doctor
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {doctors.map((doctor) => (
+                    <div
+                      key={doctor.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-gray-200 rounded-lg p-4 bg-white"
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900">{doctor.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {doctor.specialization} • {doctor.workingHours}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          ₦{doctor.fee.toLocaleString()} • {doctor.consultationDuration} min
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                          onClick={() => openEditDoctor(doctor)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteDoctor(doctor.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {doctors.length === 0 && (
+                    <div className="text-center py-12">
+                      <Stethoscope className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-600">No doctors found</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Patients Management Tab */}
+          <TabsContent value="patients">
+            <Card className="border-2 border-gray-100 shadow-lg">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl">Patients Directory</CardTitle>
+                  <CardDescription>Create, update, or remove patient profiles</CardDescription>
+                </div>
+                <Button onClick={openAddPatient} className="maternal-gradient">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Patient
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {patients.map((patient) => (
+                    <div
+                      key={patient.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-gray-200 rounded-lg p-4 bg-white"
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {patient.firstName} {patient.lastName}
+                        </p>
+                        <p className="text-sm text-gray-600">{patient.phone}</p>
+                        <p className="text-xs text-gray-500">{patient.email}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                          onClick={() => openEditPatient(patient)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeletePatient(patient.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {patients.length === 0 && (
+                    <div className="text-center py-12">
+                      <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-600">No patients found</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
+
+      {/* Doctor Dialog */}
+      <Dialog open={showDoctorDialog} onOpenChange={setShowDoctorDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingDoctor ? 'Edit Doctor' : 'Add Doctor'}</DialogTitle>
+            <DialogDescription>Manage doctor profile details</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="doctor-name">Full Name</Label>
+                <Input
+                  id="doctor-name"
+                  value={doctorForm.name}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-specialization">Specialization</Label>
+                <Input
+                  id="doctor-specialization"
+                  value={doctorForm.specialization}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, specialization: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-qualification">Qualification</Label>
+                <Input
+                  id="doctor-qualification"
+                  value={doctorForm.qualification}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, qualification: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-experience">Experience</Label>
+                <Input
+                  id="doctor-experience"
+                  value={doctorForm.experience}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, experience: e.target.value })}
+                  placeholder="e.g. 10 years"
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-duration">Consultation Duration (mins)</Label>
+                <Input
+                  id="doctor-duration"
+                  type="number"
+                  value={doctorForm.consultationDuration}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, consultationDuration: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-fee">Consultation Fee (NGN)</Label>
+                <Input
+                  id="doctor-fee"
+                  type="number"
+                  value={doctorForm.fee}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, fee: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-hours">Working Hours</Label>
+                <Input
+                  id="doctor-hours"
+                  value={doctorForm.workingHours}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, workingHours: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-languages">Languages</Label>
+                <Input
+                  id="doctor-languages"
+                  value={doctorForm.languages}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, languages: e.target.value })}
+                  placeholder="English, Hausa"
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-email">Email</Label>
+                <Input
+                  id="doctor-email"
+                  type="email"
+                  value={doctorForm.email}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-phone">Phone</Label>
+                <Input
+                  id="doctor-phone"
+                  value={doctorForm.phone}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, phone: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="doctor-bio">Bio</Label>
+              <Textarea
+                id="doctor-bio"
+                rows={4}
+                value={doctorForm.bio}
+                onChange={(e) => setDoctorForm({ ...doctorForm, bio: e.target.value })}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowDoctorDialog(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleSaveDoctor} className="flex-1 maternal-gradient">
+                {editingDoctor ? 'Update Doctor' : 'Create Doctor'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Patient Dialog */}
+      <Dialog open={showPatientDialog} onOpenChange={setShowPatientDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPatient ? 'Edit Patient' : 'Add Patient'}</DialogTitle>
+            <DialogDescription>Manage patient profile details</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="patient-first-name">First Name</Label>
+                <Input
+                  id="patient-first-name"
+                  value={patientForm.firstName}
+                  onChange={(e) => setPatientForm({ ...patientForm, firstName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="patient-last-name">Last Name</Label>
+                <Input
+                  id="patient-last-name"
+                  value={patientForm.lastName}
+                  onChange={(e) => setPatientForm({ ...patientForm, lastName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="patient-email">Email</Label>
+                <Input
+                  id="patient-email"
+                  type="email"
+                  value={patientForm.email}
+                  onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="patient-phone">Phone</Label>
+                <Input
+                  id="patient-phone"
+                  value={patientForm.phone}
+                  onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowPatientDialog(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleSavePatient} className="flex-1 maternal-gradient">
+                {editingPatient ? 'Update Patient' : 'Create Patient'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
