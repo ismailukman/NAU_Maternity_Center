@@ -139,6 +139,7 @@ interface DoctorProfile {
   id: string
   name: string
   specialization: string
+  specialties: string[]
   qualification: string
   experience: string
   consultationDuration: number
@@ -148,6 +149,8 @@ interface DoctorProfile {
   bio: string
   email: string
   phone: string
+  availability?: string[]
+  bookedSlots?: string[]
 }
 
 interface PatientProfile {
@@ -185,6 +188,16 @@ const normalizeDateValue = (value: any) => {
     return value.toDate().toISOString()
   }
   return String(value)
+}
+
+const parseSpecialties = (value: string | string[]) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 const parseTimeToMinutes = (value: string) => {
@@ -235,6 +248,24 @@ const parseWorkingRange = (value: string) => {
   const end = parseTimeToMinutes(endRaw)
   if (start === null || end === null) return null
   return { start, end }
+}
+
+const formatTimeLabel = (totalMinutes: number) => {
+  const hours24 = Math.floor(totalMinutes / 60) % 24
+  const minutes = totalMinutes % 60
+  const meridiem = hours24 >= 12 ? 'PM' : 'AM'
+  const hours12 = hours24 % 12 || 12
+  return `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${meridiem}`
+}
+
+const buildTimeSlots = (workingHours: string, durationMinutes: number) => {
+  const range = parseWorkingRange(workingHours)
+  if (!range || !durationMinutes) return []
+  const slots: string[] = []
+  for (let minutes = range.start; minutes <= range.end; minutes += durationMinutes) {
+    slots.push(formatTimeLabel(minutes))
+  }
+  return slots
 }
 
 const parseWorkingHours = (workingHours: string, durationMinutes: number) => {
@@ -293,6 +324,8 @@ export default function AdminDashboard() {
   const [showDoctorDialog, setShowDoctorDialog] = useState(false)
   const [showPatientDialog, setShowPatientDialog] = useState(false)
   const [showAppointmentDialog, setShowAppointmentDialog] = useState(false)
+  const [availableTimes, setAvailableTimes] = useState<string[]>([])
+  const [appointmentSpecialties, setAppointmentSpecialties] = useState<string[]>([])
   const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
   const [editingPatient, setEditingPatient] = useState<PatientProfile | null>(null)
   const [doctorForm, setDoctorForm] = useState({
@@ -426,6 +459,66 @@ export default function AdminDashboard() {
     })
     return () => unsubscribe()
   }, [admin])
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      if (!showAppointmentDialog) return
+      if (!appointmentForm.doctorId || !appointmentForm.appointmentDate) {
+        setAvailableTimes([])
+        return
+      }
+
+      try {
+        const doctorDoc = await getDoc(doc(db, 'doctors', appointmentForm.doctorId))
+        const doctorData = doctorDoc.exists() ? doctorDoc.data() : {}
+        const workingHours = String(doctorData?.workingHours || '09:00 AM - 05:00 PM')
+        const consultationDuration = Number(doctorData?.consultationDuration || 30)
+        const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
+        const bookedSlots = Array.isArray(doctorData?.bookedSlots) ? doctorData.bookedSlots : []
+
+        const appointmentDay = new Date(appointmentForm.appointmentDate).toLocaleDateString('en-US', { weekday: 'long' })
+        if (
+          availability.length > 0 &&
+          !availability.some((day: string) => day.toLowerCase() === appointmentDay.toLowerCase())
+        ) {
+          setAvailableTimes([])
+          return
+        }
+
+        const allSlots = buildTimeSlots(workingHours, consultationDuration)
+        const datePrefix = `${appointmentForm.appointmentDate}|`
+        const blocked = new Set(
+          bookedSlots
+            .filter((slot: string) => slot.startsWith(datePrefix))
+            .map((slot: string) => slot.slice(datePrefix.length))
+        )
+
+        const appointmentsSnapshot = await getDocs(
+          query(
+            collection(db, 'appointments'),
+            where('appointmentDate', '==', appointmentForm.appointmentDate),
+            where('doctorId', '==', appointmentForm.doctorId)
+          )
+        )
+        appointmentsSnapshot.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data()
+          const time = String(data.appointmentTime || data.timeSlot || '').trim()
+          if (time) blocked.add(time)
+        })
+
+        const available = allSlots.filter((slot) => !blocked.has(slot))
+        setAvailableTimes(available)
+        if (available.length > 0 && !available.includes(appointmentForm.appointmentTime)) {
+          setAppointmentForm((prev) => ({ ...prev, appointmentTime: '' }))
+        }
+      } catch (error) {
+        console.error('Failed to load available times:', error)
+        setAvailableTimes([])
+      }
+    }
+
+    loadAvailability()
+  }, [appointmentForm.appointmentDate, appointmentForm.doctorId, showAppointmentDialog])
 
   useEffect(() => {
     if (!admin) return
@@ -642,10 +735,13 @@ export default function AdminDashboard() {
       const snapshot = await getDocs(query(collection(db, 'doctors')))
       const mapped = snapshot.docs.map((docSnapshot) => {
         const data = docSnapshot.data()
+        const specializationValue = data.specialization || data.specialty || ''
+        const specialties = parseSpecialties(data.specialties || specializationValue)
         return {
           id: docSnapshot.id,
           name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
-          specialization: data.specialization || data.specialty || '',
+          specialization: specializationValue,
+          specialties,
           qualification: data.qualification || '',
           experience: data.experience || '',
           consultationDuration: data.consultationDuration || 30,
@@ -655,6 +751,8 @@ export default function AdminDashboard() {
           bio: data.bio || '',
           email: data.email || '',
           phone: data.phone || '',
+          availability: Array.isArray(data.availability) ? data.availability : [],
+          bookedSlots: Array.isArray(data.bookedSlots) ? data.bookedSlots : [],
         } as DoctorProfile
       })
       setDoctors(mapped)
@@ -697,6 +795,8 @@ export default function AdminDashboard() {
       reasonForVisit: '',
       symptoms: '',
     })
+    setAvailableTimes([])
+    setAppointmentSpecialties([])
   }
 
   const openAddAppointment = () => {
@@ -746,6 +846,7 @@ export default function AdminDashboard() {
         name: doctorForm.name.trim(),
         specialization: doctorForm.specialization.trim(),
         specialty: doctorForm.specialization.trim(),
+        specialties: parseSpecialties(doctorForm.specialization),
         qualification: doctorForm.qualification.trim(),
         experience: doctorForm.experience.trim(),
         consultationDuration: Number(doctorForm.consultationDuration) || 30,
@@ -2048,22 +2149,27 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Doctor</Label>
-                <Select
-                  value={appointmentForm.doctorId}
-                  onValueChange={(value) => {
-                    const doctor = doctors.find((item) => item.id === value)
-                    setAppointmentForm((prev) => ({
-                      ...prev,
-                      doctorId: value,
-                      appointmentType: prev.appointmentType || doctor?.specialization || '',
-                    }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select doctor" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Doctor</Label>
+                  <Select
+                    value={appointmentForm.doctorId}
+                    onValueChange={(value) => {
+                      const doctor = doctors.find((item) => item.id === value)
+                      const specialties = doctor?.specialties?.length
+                        ? doctor.specialties
+                        : parseSpecialties(doctor?.specialization || '')
+                      setAppointmentSpecialties(specialties)
+                      setAppointmentForm((prev) => ({
+                        ...prev,
+                        doctorId: value,
+                        appointmentType: prev.appointmentType || specialties[0] || doctor?.specialization || '',
+                        appointmentTime: '',
+                      }))
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select doctor" />
                   </SelectTrigger>
                   <SelectContent>
                     {doctors.map((doctor) => (
@@ -2073,38 +2179,63 @@ export default function AdminDashboard() {
                     ))}
                   </SelectContent>
                 </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Appointment Type</Label>
+                  <Select
+                    value={appointmentForm.appointmentType}
+                    onValueChange={(value) =>
+                      setAppointmentForm((prev) => ({ ...prev, appointmentType: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select specialty" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(appointmentSpecialties.length ? appointmentSpecialties : ['General Consultation']).map((specialty) => (
+                        <SelectItem key={specialty} value={specialty}>
+                          {specialty}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={appointmentForm.appointmentDate}
+                    onChange={(e) =>
+                      setAppointmentForm((prev) => ({
+                        ...prev,
+                        appointmentDate: e.target.value,
+                        appointmentTime: '',
+                      }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Time</Label>
+                  <Select
+                    value={appointmentForm.appointmentTime}
+                    onValueChange={(value) =>
+                      setAppointmentForm((prev) => ({ ...prev, appointmentTime: value }))
+                    }
+                    disabled={!appointmentForm.doctorId || !appointmentForm.appointmentDate || availableTimes.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={availableTimes.length ? 'Select time' : 'No availability'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTimes.map((slot) => (
+                        <SelectItem key={slot} value={slot}>
+                          {slot}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label>Appointment Type</Label>
-                <Input
-                  value={appointmentForm.appointmentType}
-                  onChange={(e) =>
-                    setAppointmentForm((prev) => ({ ...prev, appointmentType: e.target.value }))
-                  }
-                  placeholder="Consultation type"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={appointmentForm.appointmentDate}
-                  onChange={(e) =>
-                    setAppointmentForm((prev) => ({ ...prev, appointmentDate: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Time</Label>
-                <Input
-                  value={appointmentForm.appointmentTime}
-                  onChange={(e) =>
-                    setAppointmentForm((prev) => ({ ...prev, appointmentTime: e.target.value }))
-                  }
-                  placeholder="09:00 AM"
-                />
-              </div>
-            </div>
 
             <div className="grid gap-2">
               <Label>Reason for Visit *</Label>
