@@ -9,6 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Shield, Lock, Mail, Eye, EyeOff, Heart, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
+import { auth, db } from '@/lib/firebase-config'
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -24,19 +27,23 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/admin/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      })
+      const credential = await signInWithEmailAndPassword(auth, email, password)
+      const adminDoc = await getDoc(doc(db, 'admins', credential.user.uid))
+      let adminData = adminDoc.exists() ? adminDoc.data() : null
 
-      const data = await response.json()
+      if (!adminData) {
+        const adminQuery = query(
+          collection(db, 'admins'),
+          where('email', '==', email)
+        )
+        const adminSnapshot = await getDocs(adminQuery)
+        adminData = adminSnapshot.docs[0]?.data() ?? null
+      }
 
-      if (!response.ok) {
-        setError(data.error || 'Login failed')
-        toast.error(data.error || 'Login failed')
+      if (!adminData) {
+        await signOut(auth)
+        setError('Access denied. Admin account not found.')
+        toast.error('Access denied. Admin account not found.')
         return
       }
 

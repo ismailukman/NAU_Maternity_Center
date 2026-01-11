@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Heart, Baby, Activity, Stethoscope, Calendar, Clock } from 'lucide-react'
 import { toast } from 'sonner'
+import { db } from '@/lib/firebase-config'
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  serverTimestamp,
+  where,
+} from 'firebase/firestore'
 
 const SPECIALTIES = [
   { id: 'prenatal', name: 'Prenatal Care', icon: Heart, color: 'text-pink-500' },
@@ -54,6 +63,7 @@ const TIME_SLOTS = [
 
 export default function BookAppointmentPage() {
   const [step, setStep] = useState(1)
+  const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     specialty: '',
     doctorId: '',
@@ -66,10 +76,46 @@ export default function BookAppointmentPage() {
     reasonForVisit: '',
     symptoms: '',
   })
+  const [doctors, setDoctors] = useState(MOCK_DOCTORS)
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const snapshot = await getDocs(query(collection(db, 'doctors')))
+        if (snapshot.empty) return
+        const mappedDoctors = snapshot.docs.map((docSnapshot) => {
+          const data = docSnapshot.data()
+          const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+          const specializationName = String(data.specialization || '').toLowerCase()
+          const specialtyMatch = SPECIALTIES.find((specialty) =>
+            specializationName.includes(specialty.name.toLowerCase())
+          )
+
+          return {
+            id: docSnapshot.id,
+            name: name || `Dr. ${docSnapshot.id}`,
+            specialization: data.specializationId || specialtyMatch?.id || 'consultation',
+            rating: data.rating || 4.8,
+            reviews: data.reviews || 0,
+            fee: data.fee || 15000,
+          }
+        })
+        setDoctors(mappedDoctors)
+      } catch (error) {
+        console.error('Failed to load doctors:', error)
+      }
+    }
+
+    loadDoctors()
+  }, [])
 
   const selectedSpecialty = SPECIALTIES.find(s => s.id === formData.specialty)
-  const availableDoctors = MOCK_DOCTORS.filter(d => d.specialization === formData.specialty)
-  const selectedDoctor = MOCK_DOCTORS.find(d => d.id === formData.doctorId)
+  const availableDoctors = useMemo(
+    () => doctors.filter(d => d.specialization === formData.specialty),
+    [doctors, formData.specialty]
+  )
+  const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
+  const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
 
   const handleNext = () => {
     if (step === 1 && !formData.specialty) {
@@ -91,11 +137,87 @@ export default function BookAppointmentPage() {
     setStep(step + 1)
   }
 
-  const handleSubmit = () => {
-    toast.success('Appointment booked successfully!', {
-      description: 'You will receive a confirmation SMS and email shortly.',
-    })
-    // In production, this would call an API endpoint
+  const handleSubmit = async () => {
+    if (!selectedDoctor) {
+      toast.error('Please select a doctor before confirming.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const patientNameParts = formData.patientName.trim().split(/\s+/)
+      const patientFirstName = patientNameParts[0] || ''
+      const patientLastName = patientNameParts.slice(1).join(' ')
+
+      let patientId = ''
+      if (formData.email) {
+        const existingPatientQuery = query(
+          collection(db, 'patients'),
+          where('email', '==', formData.email)
+        )
+        const patientSnapshot = await getDocs(existingPatientQuery)
+        if (!patientSnapshot.empty) {
+          patientId = patientSnapshot.docs[0].id
+        }
+      }
+
+      if (!patientId) {
+        const patientRef = await addDoc(collection(db, 'patients'), {
+          firstName: patientFirstName,
+          lastName: patientLastName,
+          email: formData.email || '',
+          phone: formData.phone,
+          createdAt: serverTimestamp(),
+        })
+        patientId = patientRef.id
+      }
+
+      const appointmentNumber = `APT-${formData.date.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
+
+      await addDoc(collection(db, 'appointments'), {
+        appointmentNumber,
+        appointmentType: formData.appointmentType || selectedSpecialtyName,
+        appointmentDate: formData.date,
+        appointmentTime: formData.timeSlot,
+        status: 'SCHEDULED',
+        checkedIn: false,
+        queueNumber: null,
+        patientId,
+        patientName: formData.patientName,
+        patientFirstName,
+        patientLastName,
+        patientEmail: formData.email || '',
+        patientPhone: formData.phone,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        specialty: formData.specialty,
+        reasonForVisit: formData.reasonForVisit,
+        symptoms: formData.symptoms,
+        createdAt: serverTimestamp(),
+      })
+
+      toast.success('Appointment booked successfully!', {
+        description: 'You will receive a confirmation SMS and email shortly.',
+      })
+      setStep(1)
+      setFormData({
+        specialty: '',
+        doctorId: '',
+        date: '',
+        timeSlot: '',
+        appointmentType: '',
+        patientName: '',
+        phone: '',
+        email: '',
+        reasonForVisit: '',
+        symptoms: '',
+      })
+    } catch (error) {
+      console.error('Failed to book appointment:', error)
+      toast.error('Unable to book appointment. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -433,8 +555,8 @@ export default function BookAppointmentPage() {
                     Next
                   </Button>
                 ) : (
-                  <Button onClick={handleSubmit} className="px-8 maternal-gradient">
-                    Confirm Booking
+                  <Button onClick={handleSubmit} className="px-8 maternal-gradient" disabled={submitting}>
+                    {submitting ? 'Booking...' : 'Confirm Booking'}
                   </Button>
                 )}
               </div>

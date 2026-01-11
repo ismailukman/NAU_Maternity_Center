@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,19 @@ import {
   Stethoscope,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { auth, db } from '@/lib/firebase-config'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getCountFromServer,
+  getDoc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from 'firebase/firestore'
 import {
   Dialog,
   DialogContent,
@@ -114,6 +127,48 @@ interface DoctorSchedule {
   }
 }
 
+const buildNameParts = (fullName?: string) => {
+  if (!fullName) return { firstName: '', lastName: '' }
+  const parts = fullName.trim().split(/\s+/)
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' ') || '',
+  }
+}
+
+const normalizeDateValue = (value: any) => {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (typeof value.toDate === 'function') {
+    return value.toDate().toISOString()
+  }
+  return String(value)
+}
+
+const parseWorkingHours = (workingHours: string, durationMinutes: number) => {
+  if (!workingHours || !durationMinutes) return 0
+  const [startRaw, endRaw] = workingHours.split('-').map((segment) => segment.trim())
+  if (!startRaw || !endRaw) return 0
+
+  const parseTime = (value: string) => {
+    const trimmed = value.trim().toUpperCase()
+    const hasMeridiem = trimmed.includes('AM') || trimmed.includes('PM')
+    const normalized = hasMeridiem ? trimmed : `${trimmed} AM`
+    const [timePart, meridiem] = normalized.split(/\s+/)
+    const [hoursRaw, minutesRaw] = timePart.split(':')
+    let hours = Number(hoursRaw)
+    const minutes = Number(minutesRaw || '0')
+    if (meridiem === 'PM' && hours < 12) hours += 12
+    if (meridiem === 'AM' && hours === 12) hours = 0
+    return hours * 60 + minutes
+  }
+
+  const startMinutes = parseTime(startRaw)
+  const endMinutes = parseTime(endRaw)
+  if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes) || endMinutes <= startMinutes) return 0
+  return Math.floor((endMinutes - startMinutes) / durationMinutes)
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [admin, setAdmin] = useState<Admin | null>(null)
@@ -130,48 +185,90 @@ export default function AdminDashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const [activeTab, setActiveTab] = useState('appointments')
+  const todayString = useMemo(() => new Date().toISOString().split('T')[0], [])
 
   // Check authentication
   useEffect(() => {
-    checkAuth()
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.push('/admin/login')
+        setLoading(false)
+        return
+      }
+
+      try {
+        const adminDoc = await getDoc(doc(db, 'admins', user.uid))
+        let adminData = adminDoc.exists() ? adminDoc.data() : null
+
+        if (!adminData && user.email) {
+          const adminQuery = query(
+            collection(db, 'admins'),
+            where('email', '==', user.email)
+          )
+          const adminSnapshot = await getDocs(adminQuery)
+          adminData = adminSnapshot.docs[0]?.data() ?? null
+        }
+
+        if (!adminData) {
+          await signOut(auth)
+          router.push('/admin/login')
+          setLoading(false)
+          return
+        }
+
+        setAdmin({
+          id: user.uid,
+          email: adminData.email || user.email || '',
+          firstName: adminData.firstName || '',
+          lastName: adminData.lastName || '',
+          role: adminData.role || 'admin',
+        })
+      } catch (error) {
+        router.push('/admin/login')
+      } finally {
+        setLoading(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!admin) return
     fetchStats()
     fetchAppointments()
     markMissedAppointments()
     fetchDoctorSchedules()
-  }, [])
+  }, [admin])
 
   useEffect(() => {
+    if (!admin) return
     fetchAppointments()
-  }, [currentPage, filterStatus])
-
-  const checkAuth = async () => {
-    try {
-      const response = await fetch('/api/admin/auth/verify')
-      const data = await response.json()
-
-      if (!response.ok) {
-        router.push('/admin/login')
-        return
-      }
-
-      setAdmin(data.admin)
-    } catch (error) {
-      router.push('/admin/login')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [currentPage, filterStatus, admin])
 
   const markMissedAppointments = async () => {
     try {
-      const response = await fetch('/api/admin/appointments/mark-missed', {
-        method: 'POST',
-      })
-      const data = await response.json()
+      const appointmentsQuery = query(collection(db, 'appointments'))
+      const snapshot = await getDocs(appointmentsQuery)
+      const now = new Date()
+      const updates = snapshot.docs
+        .map((docSnapshot) => ({ id: docSnapshot.id, data: docSnapshot.data() }))
+        .filter(({ data }) => {
+          const dateValue = normalizeDateValue(data.appointmentDate)
+          if (!dateValue) return false
+          const appointmentDate = new Date(dateValue)
+          appointmentDate.setHours(0, 0, 0, 0)
+          const today = new Date(now)
+          today.setHours(0, 0, 0, 0)
+          const status = data.status || 'PENDING'
+          return appointmentDate < today && !['COMPLETED', 'CANCELLED', 'MISSED'].includes(status)
+        })
 
-      if (response.ok && data.missedCount > 0) {
-        console.log(`Marked ${data.missedCount} appointments as missed`)
-      }
+      await Promise.all(
+        updates.map(({ id }) =>
+          updateDoc(doc(db, 'appointments', id), { status: 'MISSED' })
+        )
+      )
     } catch (error) {
       console.error('Failed to mark missed appointments:', error)
     }
@@ -179,12 +276,37 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/admin/stats')
-      const data = await response.json()
+      const appointmentsRef = collection(db, 'appointments')
+      const patientsRef = collection(db, 'patients')
+      const doctorsRef = collection(db, 'doctors')
 
-      if (response.ok) {
-        setStats(data.stats)
-      }
+      const [
+        totalAppointmentsSnap,
+        todayAppointmentsSnap,
+        scheduledAppointmentsSnap,
+        completedAppointmentsSnap,
+        cancelledAppointmentsSnap,
+        totalPatientsSnap,
+        totalDoctorsSnap,
+      ] = await Promise.all([
+        getCountFromServer(query(appointmentsRef)),
+        getCountFromServer(query(appointmentsRef, where('appointmentDate', '==', todayString))),
+        getCountFromServer(query(appointmentsRef, where('status', '==', 'SCHEDULED'))),
+        getCountFromServer(query(appointmentsRef, where('status', '==', 'COMPLETED'))),
+        getCountFromServer(query(appointmentsRef, where('status', '==', 'CANCELLED'))),
+        getCountFromServer(query(patientsRef)),
+        getCountFromServer(query(doctorsRef)),
+      ])
+
+      setStats({
+        totalAppointments: totalAppointmentsSnap.data().count,
+        todayAppointments: todayAppointmentsSnap.data().count,
+        scheduledAppointments: scheduledAppointmentsSnap.data().count,
+        completedAppointments: completedAppointmentsSnap.data().count,
+        cancelledAppointments: cancelledAppointmentsSnap.data().count,
+        totalPatients: totalPatientsSnap.data().count,
+        totalDoctors: totalDoctorsSnap.data().count,
+      })
     } catch (error) {
       console.error('Failed to fetch stats:', error)
     }
@@ -192,26 +314,74 @@ export default function AdminDashboard() {
 
   const fetchAppointments = async () => {
     try {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '10',
+      const appointmentsRef = collection(db, 'appointments')
+      const constraints = []
+      if (filterStatus && filterStatus.trim()) {
+        constraints.push(where('status', '==', filterStatus.trim()))
+      }
+
+      const appointmentsQuery = query(appointmentsRef, ...constraints)
+      const snapshot = await getDocs(appointmentsQuery)
+      const mapped = await Promise.all(
+        snapshot.docs.map(async (docSnapshot) => {
+          const data = docSnapshot.data()
+          const patientName = data.patientName || data.patient?.name || ''
+          const patientParts = buildNameParts(patientName)
+          const doctorName = data.doctorName || data.doctor?.name || ''
+          const doctorParts = buildNameParts(doctorName.replace(/^Dr\\.?\\s*/, ''))
+          const appointmentDate = normalizeDateValue(data.appointmentDate)
+          const appointmentTime = data.appointmentTime || data.timeSlot || ''
+          const appointmentType = data.appointmentType || data.specialty || data.service || 'General Consultation'
+
+          return {
+            id: docSnapshot.id,
+            appointmentNumber: data.appointmentNumber || docSnapshot.id,
+            appointmentType,
+            appointmentDate,
+            appointmentTime,
+            status: data.status || 'PENDING',
+            checkedIn: Boolean(data.checkedIn),
+            checkInTime: data.checkInTime ? normalizeDateValue(data.checkInTime) : null,
+            queueNumber: data.queueNumber || null,
+            patient: {
+              user: {
+                firstName: data.patientFirstName || patientParts.firstName,
+                lastName: data.patientLastName || patientParts.lastName,
+                email: data.patientEmail || data.patient?.email || '',
+                phone: data.patientPhone || data.patient?.phone || '',
+              },
+            },
+            doctor: {
+              user: {
+                firstName: data.doctorFirstName || doctorParts.firstName,
+                lastName: data.doctorLastName || doctorParts.lastName,
+              },
+            },
+          } as Appointment
+        })
+      )
+
+      const searchLower = searchTerm.trim().toLowerCase()
+      const filtered = searchLower
+        ? mapped.filter((appointment) => {
+            const name = `${appointment.patient.user.firstName} ${appointment.patient.user.lastName}`.toLowerCase()
+            return name.includes(searchLower)
+          })
+        : mapped
+
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.appointmentDate).getTime()
+        const dateB = new Date(b.appointmentDate).getTime()
+        if (dateA !== dateB) return dateA - dateB
+        return (a.appointmentTime || '').localeCompare(b.appointmentTime || '')
       })
 
-      if (filterStatus) {
-        params.append('status', filterStatus)
-      }
-
-      if (searchTerm) {
-        params.append('patientName', searchTerm)
-      }
-
-      const response = await fetch(`/api/admin/appointments?${params}`)
-      const data = await response.json()
-
-      if (response.ok) {
-        setAppointments(data.appointments)
-        setTotalPages(data.pagination.totalPages)
-      }
+      const pageSize = 10
+      const total = filtered.length
+      setTotalPages(Math.max(1, Math.ceil(total / pageSize)))
+      const start = (currentPage - 1) * pageSize
+      const paged = filtered.slice(start, start + pageSize)
+      setAppointments(paged)
     } catch (error) {
       console.error('Failed to fetch appointments:', error)
     }
@@ -219,13 +389,60 @@ export default function AdminDashboard() {
 
   const fetchDoctorSchedules = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
-      const response = await fetch(`/api/admin/doctors/schedule?date=${today}`)
-      const data = await response.json()
+      const doctorsSnapshot = await getDocs(query(collection(db, 'doctors')))
+      const appointmentsSnapshot = await getDocs(
+        query(collection(db, 'appointments'), where('appointmentDate', '==', todayString))
+      )
 
-      if (response.ok) {
-        setDoctorSchedules(data.schedules)
-      }
+      const appointmentsData = appointmentsSnapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        data: docSnapshot.data(),
+      }))
+
+      const schedules = doctorsSnapshot.docs.map((docSnapshot) => {
+        const doctorData = docSnapshot.data()
+        const doctorId = docSnapshot.id
+        const doctorName = doctorData.name || `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim()
+        const doctorAppointments = appointmentsData.filter(
+          (appointment) => appointment.data.doctorId === doctorId
+        )
+
+        const appointmentItems = doctorAppointments.map(({ id, data }) => ({
+          id,
+          appointmentNumber: data.appointmentNumber || id,
+          patientName: data.patientName || `${data.patientFirstName || ''} ${data.patientLastName || ''}`.trim(),
+          time: data.appointmentTime || data.timeSlot || '',
+          status: data.status || 'PENDING',
+          type: data.appointmentType || data.specialty || data.service || 'General Consultation',
+        }))
+
+        const totalSlots = parseWorkingHours(
+          doctorData.workingHours || '09:00 AM - 05:00 PM',
+          doctorData.consultationDuration || 30
+        )
+        const bookedSlots = appointmentItems.length
+        const availableSlots = Math.max(totalSlots - bookedSlots, 0)
+        const utilizationRate = totalSlots ? Math.round((bookedSlots / totalSlots) * 100) : 0
+
+        return {
+          doctor: {
+            id: doctorId,
+            name: doctorName || `Dr. ${doctorId}`,
+            specialization: doctorData.specialization || 'General',
+            workingHours: doctorData.workingHours || '09:00 AM - 05:00 PM',
+            consultationDuration: doctorData.consultationDuration || 30,
+          },
+          appointments: appointmentItems,
+          stats: {
+            totalSlots,
+            bookedSlots,
+            availableSlots,
+            utilizationRate: String(utilizationRate),
+          },
+        }
+      })
+
+      setDoctorSchedules(schedules)
     } catch (error) {
       console.error('Failed to fetch doctor schedules:', error)
     }
@@ -233,7 +450,7 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/admin/auth/logout', { method: 'POST' })
+      await signOut(auth)
       toast.success('Logged out successfully')
       router.push('/admin/login')
     } catch (error) {
@@ -248,20 +465,21 @@ export default function AdminDashboard() {
 
   const handleCheckIn = async (appointmentId: string) => {
     try {
-      const response = await fetch(`/api/admin/appointments/${appointmentId}/checkin`, {
-        method: 'POST',
+      const todayAppointments = await getCountFromServer(
+        query(collection(db, 'appointments'), where('appointmentDate', '==', todayString), where('checkedIn', '==', true))
+      )
+      const queueNumber = String(todayAppointments.data().count + 1).padStart(3, '0')
+      await updateDoc(doc(db, 'appointments', appointmentId), {
+        checkedIn: true,
+        status: 'CHECKED_IN',
+        checkInTime: new Date().toISOString(),
+        queueNumber,
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
-        toast.success(`Patient checked in! Queue Number: ${data.queueNumber}`)
-        fetchAppointments()
-        fetchStats()
-        fetchDoctorSchedules()
-      } else {
-        toast.error(data.error || 'Failed to check in patient')
-      }
+      toast.success(`Patient checked in! Queue Number: ${queueNumber}`)
+      fetchAppointments()
+      fetchStats()
+      fetchDoctorSchedules()
     } catch (error) {
       toast.error('An error occurred during check-in')
     }
@@ -271,25 +489,16 @@ export default function AdminDashboard() {
     if (!selectedAppointment) return
 
     try {
-      const response = await fetch(`/api/admin/appointments/${selectedAppointment.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: editStatus }),
+      await updateDoc(doc(db, 'appointments', selectedAppointment.id), {
+        status: editStatus,
+        checkedIn: editStatus === 'CHECKED_IN' ? true : selectedAppointment.checkedIn,
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
-        toast.success('Appointment updated successfully')
-        setShowEditDialog(false)
-        fetchAppointments()
-        fetchStats()
-        fetchDoctorSchedules()
-      } else {
-        toast.error(data.error || 'Failed to update appointment')
-      }
+      toast.success('Appointment updated successfully')
+      setShowEditDialog(false)
+      fetchAppointments()
+      fetchStats()
+      fetchDoctorSchedules()
     } catch (error) {
       toast.error('An error occurred')
     }
@@ -299,18 +508,11 @@ export default function AdminDashboard() {
     if (!confirm('Are you sure you want to delete this appointment?')) return
 
     try {
-      const response = await fetch(`/api/admin/appointments/${id}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        toast.success('Appointment deleted successfully')
-        fetchAppointments()
-        fetchStats()
-        fetchDoctorSchedules()
-      } else {
-        toast.error('Failed to delete appointment')
-      }
+      await deleteDoc(doc(db, 'appointments', id))
+      toast.success('Appointment deleted successfully')
+      fetchAppointments()
+      fetchStats()
+      fetchDoctorSchedules()
     } catch (error) {
       toast.error('An error occurred')
     }
