@@ -1171,7 +1171,7 @@ export default function AdminDashboard() {
     setEditingDoctor(doctor)
     setDoctorForm({
       name: doctor.name,
-      specialization: doctor.specialization,
+      specialization: doctor.specialties.length ? doctor.specialties.join(', ') : doctor.specialization,
       qualification: doctor.qualification,
       experience: doctor.experience,
       consultationDuration: doctor.consultationDuration,
@@ -1188,11 +1188,13 @@ export default function AdminDashboard() {
 
   const handleSaveDoctor = async () => {
     try {
+      const specialties = parseSpecialties(doctorForm.specialization)
+      const primarySpecialty = specialties[0] || ''
       const payload = {
         name: doctorForm.name.trim(),
-        specialization: doctorForm.specialization.trim(),
-        specialty: doctorForm.specialization.trim(),
-        specialties: parseSpecialties(doctorForm.specialization),
+        specialization: primarySpecialty,
+        specialty: primarySpecialty,
+        specialties,
         qualification: doctorForm.qualification.trim(),
         experience: doctorForm.experience.trim(),
         consultationDuration: Number(doctorForm.consultationDuration) || 30,
@@ -2408,7 +2410,7 @@ export default function AdminDashboard() {
                       <div>
                         <p className="font-semibold text-gray-900">{formatDoctorName(doctor.name)}</p>
                         <p className="text-sm text-gray-600">
-                          {doctor.specialization} • {doctor.workingHours}
+                          {(doctor.specialties.length ? doctor.specialties.join(' • ') : doctor.specialization) || 'General Consultation'} • {doctor.workingHours}
                         </p>
                         <p className="text-xs text-gray-500">
                           ₦{doctor.fee.toLocaleString()} • {doctor.consultationDuration} min

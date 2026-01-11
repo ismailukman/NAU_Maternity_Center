@@ -22,6 +22,16 @@ const formatDoctorName = (name: string) => {
   return `Dr. ${trimmed}`
 }
 
+const parseSpecialties = (value: string | string[]) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 export default function DoctorsPage() {
   const [doctorList, setDoctorList] = useState(doctors)
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Doctors')
@@ -48,16 +58,16 @@ export default function DoctorsPage() {
           const mapped = snapshot.docs.map((docSnapshot) => {
             const data = docSnapshot.data()
             const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
-            const specialization =
-              data.specialization ||
-              data.specialty ||
-              (Array.isArray(data.specialties) ? data.specialties[0] : '') ||
-              'General Consultation'
+            const specialties = parseSpecialties(
+              Array.isArray(data.specialties) ? data.specialties : data.specialization || data.specialty || ''
+            )
+            const specialization = specialties[0] || 'General Consultation'
             return {
               id: docSnapshot.id,
               name: name || `${docSnapshot.id}`,
               qualification: data.qualification || '',
               specialization,
+              specialties: specialties.length ? specialties : [specialization],
               rating: data.rating || 4.7,
               reviews: data.reviews || 0,
               experience: data.experience || '',
@@ -134,9 +144,13 @@ export default function DoctorsPage() {
                     <CardDescription className="text-base">
                       <span className="text-maternal-primary font-semibold">{doctor.qualification}</span>
                     </CardDescription>
-                    <Badge className="mt-2 bg-maternal-light text-maternal-primary">
-                      {doctor.specialization}
-                    </Badge>
+                    <div className="mt-2 flex flex-wrap justify-center gap-2">
+                      {(doctor.specialties?.length ? doctor.specialties : [doctor.specialization]).map((specialty) => (
+                        <Badge key={specialty} className="bg-maternal-light text-maternal-primary">
+                          {specialty}
+                        </Badge>
+                      ))}
+                    </div>
                   </CardHeader>
 
                   <CardContent className="space-y-4">
@@ -220,6 +234,7 @@ const doctors = [
     name: 'Dr. Aisha Abdullahi',
     qualification: 'MBBS, FWACS',
     specialization: 'Obstetrics & Gynecology',
+    specialties: ['Obstetrics & Gynecology', 'General Consultation'],
     rating: 4.9,
     reviews: 127,
     experience: 15,
@@ -233,6 +248,7 @@ const doctors = [
     name: 'Dr. Chidi Okonkwo',
     qualification: 'MBBS, MRCOG',
     specialization: 'Pediatrics',
+    specialties: ['Pediatrics', 'General Consultation'],
     rating: 4.8,
     reviews: 98,
     experience: 12,
@@ -246,6 +262,7 @@ const doctors = [
     name: 'Dr. Fatima Ibrahim',
     qualification: 'MBBS, MD',
     specialization: 'Neonatology',
+    specialties: ['Neonatology', 'General Consultation'],
     rating: 4.9,
     reviews: 156,
     experience: 18,
@@ -259,6 +276,7 @@ const doctors = [
     name: 'Dr. Ngozi Eze',
     qualification: 'MBBS, FRCOG',
     specialization: 'OB/GYN',
+    specialties: ['OB/GYN', 'General Consultation'],
     rating: 4.7,
     reviews: 89,
     experience: 10,
@@ -272,6 +290,7 @@ const doctors = [
     name: 'Dr. Blessing Adebayo',
     qualification: 'RN, IBCLC',
     specialization: 'Lactation Consultant',
+    specialties: ['Lactation Consultant', 'General Consultation'],
     rating: 5.0,
     reviews: 67,
     experience: 8,
@@ -285,6 +304,7 @@ const doctors = [
     name: 'Dr. Usman Bello',
     qualification: 'MBBS, FMCOG',
     specialization: 'Maternal-Fetal Medicine',
+    specialties: ['Maternal-Fetal Medicine', 'General Consultation'],
     rating: 4.8,
     reviews: 112,
     experience: 16,

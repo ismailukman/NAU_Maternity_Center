@@ -31,10 +31,21 @@ const formatDoctorName = (name: string) => {
   return `Dr. ${trimmed}`
 }
 
+const parseSpecialties = (value: string | string[]) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 type DoctorRecord = {
   id: string
   name: string
   specialization: string
+  specialties?: string[]
   qualification?: string
   experience?: string | number
   rating?: number
@@ -77,10 +88,14 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
 
         const data = snapshot.data()
         const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+        const specialties = parseSpecialties(
+          Array.isArray(data.specialties) ? data.specialties : data.specialization || data.specialty || ''
+        )
         setDoctor({
           id: snapshot.id,
           name,
-          specialization: data.specialization || data.specialty || 'General Consultation',
+          specialization: specialties[0] || 'General Consultation',
+          specialties: specialties.length ? specialties : ['General Consultation'],
           qualification: data.qualification || '',
           experience: data.experience ?? '',
           rating: data.rating ?? 4.7,
@@ -150,9 +165,13 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
                 {stripDoctorPrefix(doctor.name).split(' ').map((segment) => segment[0]).join('')}
               </div>
               <div className="text-center md:text-left space-y-3">
-                <Badge className="bg-white/20 border-white/30 text-white">
-                  {doctor.specialization}
-                </Badge>
+                <div className="flex flex-wrap justify-center md:justify-start gap-2">
+                  {(doctor.specialties?.length ? doctor.specialties : [doctor.specialization]).map((specialty) => (
+                    <Badge key={specialty} className="bg-white/20 border-white/30 text-white">
+                      {specialty}
+                    </Badge>
+                  ))}
+                </div>
                 <h1 className="text-4xl md:text-5xl font-bold">{formatDoctorName(doctor.name)}</h1>
                 {doctor.qualification && (
                   <p className="text-lg text-white/90">{doctor.qualification}</p>
