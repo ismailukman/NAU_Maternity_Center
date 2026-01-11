@@ -14,9 +14,10 @@ service cloud.firestore {
              get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Admins collection - only admins can read/write
+    // Admins collection - allow signed-in users to read their own admin record
     match /admins/{adminId} {
-      allow read, write: if isAdmin();
+      allow read: if isAuthenticated() && request.auth.uid == adminId;
+      allow write: if isAdmin();
     }
 
     // Patients collection - admins can read/write, users can read their own

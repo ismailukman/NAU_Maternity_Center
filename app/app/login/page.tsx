@@ -56,15 +56,6 @@ export default function LoginPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-md px-4">
-        {/* Back to Home */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 mb-6 text-gray-600 hover:text-maternal-primary transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Home
-        </Link>
-
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <Link href="/" className="relative w-32 h-32 animate-float-logo">

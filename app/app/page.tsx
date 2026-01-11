@@ -658,6 +658,16 @@ export default function HomePage() {
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
+              <Link href="/admin/login">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="text-lg px-10 py-7 border-2 border-white/70 text-white hover:bg-white hover:text-maternal-primary shadow-xl hover:shadow-2xl transform hover:scale-110 hover:-translate-y-2 transition-all duration-300 group backdrop-blur-sm"
+                >
+                  <Shield className="mr-3 h-6 w-6 group-hover:rotate-6 transition-transform" />
+                  <span className="font-semibold">Admin Portal</span>
+                </Button>
+              </Link>
             </div>
 
             {/* Trust indicators */}
