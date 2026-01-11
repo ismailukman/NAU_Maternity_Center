@@ -145,6 +145,7 @@ interface DoctorSchedule {
     id: string
     appointmentNumber: string
     patientName: string
+    date?: string
     time: string
     status: string
     type: string
