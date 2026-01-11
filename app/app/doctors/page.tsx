@@ -41,7 +41,9 @@ export default function DoctorsPage() {
             rating: data.rating || 4.7,
             reviews: data.reviews || 0,
             experience: data.experience || '',
-            languages: Array.isArray(data.languages) ? data.languages : [],
+            languages: Array.isArray(data.languages)
+              ? [...data.languages].sort((a, b) => String(a).localeCompare(String(b)))
+              : [],
             consultationDuration: data.consultationDuration || 30,
             fee: data.fee || 15000,
             bio: data.bio || 'Experienced specialist providing compassionate care.',

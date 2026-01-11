@@ -87,7 +87,9 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
           reviews: data.reviews ?? 0,
           consultationDuration: data.consultationDuration ?? 30,
           fee: data.fee ?? 15000,
-          languages: Array.isArray(data.languages) ? data.languages : [],
+          languages: Array.isArray(data.languages)
+            ? [...data.languages].sort((a, b) => String(a).localeCompare(String(b)))
+            : [],
           bio: data.bio || 'Experienced specialist providing compassionate care.',
           workingHours: data.workingHours || '09:00 AM - 05:00 PM',
           availability: Array.isArray(data.availability) ? data.availability : [],

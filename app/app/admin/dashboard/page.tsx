@@ -213,6 +213,14 @@ const parseSpecialties = (value: string | string[]) => {
     .filter(Boolean)
 }
 
+const buildAppointmentSpecialties = (value: string | string[]) => {
+  const base = parseSpecialties(value)
+  const withGeneral = base.includes('General Consultation')
+    ? base
+    : ['General Consultation', ...base]
+  return Array.from(new Set(withGeneral))
+}
+
 const parseLanguages = (value: string | string[]) =>
   (Array.isArray(value) ? value : String(value || '').split(','))
     .map((item) => String(item).trim())
@@ -944,8 +952,8 @@ export default function AdminDashboard() {
         })
 
     const specialties = matchedDoctor?.specialties?.length
-      ? matchedDoctor.specialties
-      : parseSpecialties(matchedDoctor?.specialization || '')
+      ? buildAppointmentSpecialties(matchedDoctor.specialties)
+      : buildAppointmentSpecialties(matchedDoctor?.specialization || '')
 
     setEditSpecialties(specialties)
     setEditAppointmentForm({
@@ -954,7 +962,7 @@ export default function AdminDashboard() {
       doctorId: matchedDoctor?.id || appointment.doctorId || '',
       appointmentDate: appointment.appointmentDate || '',
       appointmentTime: appointment.appointmentTime || '',
-      appointmentType: appointment.appointmentType || specialties[0] || '',
+      appointmentType: appointment.appointmentType || specialties[0] || 'General Consultation',
       reasonForVisit: appointment.reasonForVisit || '',
       symptoms: appointment.symptoms || '',
       status: appointment.status || 'SCHEDULED',
@@ -2175,7 +2183,7 @@ export default function AdminDashboard() {
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-gray-200 rounded-lg p-4 bg-white"
                     >
                       <div>
-                        <p className="font-semibold text-gray-900">{doctor.name}</p>
+                        <p className="font-semibold text-gray-900">{formatDoctorName(doctor.name)}</p>
                         <p className="text-sm text-gray-600">
                           {doctor.specialization} • {doctor.workingHours}
                         </p>
@@ -2642,13 +2650,13 @@ export default function AdminDashboard() {
                     onValueChange={(value) => {
                       const doctor = doctors.find((item) => item.id === value)
                       const specialties = doctor?.specialties?.length
-                        ? doctor.specialties
-                        : parseSpecialties(doctor?.specialization || '')
+                        ? buildAppointmentSpecialties(doctor.specialties)
+                        : buildAppointmentSpecialties(doctor?.specialization || '')
                       setAppointmentSpecialties(specialties)
                       setAppointmentForm((prev) => ({
                         ...prev,
                         doctorId: value,
-                        appointmentType: prev.appointmentType || specialties[0] || doctor?.specialization || '',
+                        appointmentType: prev.appointmentType || specialties[0] || doctor?.specialization || 'General Consultation',
                         appointmentTime: '',
                       }))
                     }}
@@ -2677,11 +2685,11 @@ export default function AdminDashboard() {
                       <SelectValue placeholder="Select specialty" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(appointmentSpecialties.length ? appointmentSpecialties : ['General Consultation']).map((specialty) => (
-                        <SelectItem key={specialty} value={specialty}>
-                          {specialty}
-                        </SelectItem>
-                      ))}
+                    {(appointmentSpecialties.length ? appointmentSpecialties : ['General Consultation']).map((specialty) => (
+                      <SelectItem key={specialty} value={specialty}>
+                        {specialty}
+                      </SelectItem>
+                    ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2795,13 +2803,13 @@ export default function AdminDashboard() {
                   onValueChange={(value) => {
                     const doctor = doctors.find((item) => item.id === value)
                     const specialties = doctor?.specialties?.length
-                      ? doctor.specialties
-                      : parseSpecialties(doctor?.specialization || '')
+                      ? buildAppointmentSpecialties(doctor.specialties)
+                      : buildAppointmentSpecialties(doctor?.specialization || '')
                     setEditSpecialties(specialties)
                     setEditAppointmentForm((prev) => ({
                       ...prev,
                       doctorId: value,
-                      appointmentType: specialties[0] || prev.appointmentType,
+                      appointmentType: specialties[0] || prev.appointmentType || 'General Consultation',
                       appointmentTime: '',
                     }))
                   }}
