@@ -45,8 +45,10 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   updateDoc,
   where,
+  arrayUnion,
 } from 'firebase/firestore'
 import {
   Dialog,
@@ -185,6 +187,56 @@ const normalizeDateValue = (value: any) => {
   return String(value)
 }
 
+const parseTimeToMinutes = (value: string) => {
+  const trimmed = value.trim().toUpperCase()
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/)
+  if (!match) return null
+  let hours = Number(match[1])
+  const minutes = Number(match[2] || '0')
+  const meridiem = match[3]
+  if (meridiem === 'PM' && hours < 12) hours += 12
+  if (meridiem === 'AM' && hours === 12) hours = 0
+  return hours * 60 + minutes
+}
+
+const parseTimeInput = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const upper = trimmed.toUpperCase()
+  const ampmMatch = upper.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/)
+  if (ampmMatch) {
+    const hoursRaw = Number(ampmMatch[1])
+    const minutes = Number(ampmMatch[2] || '0')
+    const meridiem = ampmMatch[3]
+    const hours12 = hoursRaw % 12 || 12
+    const label = `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${meridiem}`
+    const minutesValue = parseTimeToMinutes(label)
+    if (minutesValue === null) return null
+    return { minutes: minutesValue, label }
+  }
+  const twentyFourMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/)
+  if (twentyFourMatch) {
+    const hours = Number(twentyFourMatch[1])
+    const minutes = Number(twentyFourMatch[2])
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+    const totalMinutes = hours * 60 + minutes
+    const meridiem = hours >= 12 ? 'PM' : 'AM'
+    const hours12 = hours % 12 || 12
+    const label = `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${meridiem}`
+    return { minutes: totalMinutes, label }
+  }
+  return null
+}
+
+const parseWorkingRange = (value: string) => {
+  const [startRaw, endRaw] = value.split('-').map((part) => part.trim())
+  if (!startRaw || !endRaw) return null
+  const start = parseTimeToMinutes(startRaw)
+  const end = parseTimeToMinutes(endRaw)
+  if (start === null || end === null) return null
+  return { start, end }
+}
+
 const parseWorkingHours = (workingHours: string, durationMinutes: number) => {
   if (!workingHours || !durationMinutes) return 0
   const [startRaw, endRaw] = workingHours.split('-').map((segment) => segment.trim())
@@ -231,6 +283,7 @@ export default function AdminDashboard() {
   const [now, setNow] = useState<number>(() => Date.now())
   const [showDoctorDialog, setShowDoctorDialog] = useState(false)
   const [showPatientDialog, setShowPatientDialog] = useState(false)
+  const [showAppointmentDialog, setShowAppointmentDialog] = useState(false)
   const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
   const [editingPatient, setEditingPatient] = useState<PatientProfile | null>(null)
   const [doctorForm, setDoctorForm] = useState({
@@ -251,6 +304,20 @@ export default function AdminDashboard() {
     lastName: '',
     email: '',
     phone: '',
+  })
+  const [appointmentForm, setAppointmentForm] = useState({
+    patientType: 'existing',
+    patientId: '',
+    patientFirstName: '',
+    patientLastName: '',
+    patientEmail: '',
+    patientPhone: '',
+    doctorId: '',
+    appointmentDate: '',
+    appointmentTime: '',
+    appointmentType: '',
+    reasonForVisit: '',
+    symptoms: '',
   })
   const todayString = useMemo(() => new Date().toISOString().split('T')[0], [])
 
@@ -606,6 +673,28 @@ export default function AdminDashboard() {
     }
   }
 
+  const resetAppointmentForm = () => {
+    setAppointmentForm({
+      patientType: 'existing',
+      patientId: '',
+      patientFirstName: '',
+      patientLastName: '',
+      patientEmail: '',
+      patientPhone: '',
+      doctorId: '',
+      appointmentDate: '',
+      appointmentTime: '',
+      appointmentType: '',
+      reasonForVisit: '',
+      symptoms: '',
+    })
+  }
+
+  const openAddAppointment = () => {
+    resetAppointmentForm()
+    setShowAppointmentDialog(true)
+  }
+
   const openAddDoctor = () => {
     setEditingDoctor(null)
     setDoctorForm({
@@ -744,6 +833,201 @@ export default function AdminDashboard() {
       fetchStats()
     } catch (error) {
       toast.error('Unable to delete patient')
+    }
+  }
+
+  const handleCreateAppointment = async () => {
+    if (!appointmentForm.doctorId || !appointmentForm.appointmentDate || !appointmentForm.appointmentTime) {
+      toast.error('Please select a doctor, date, and time.')
+      return
+    }
+    if (appointmentForm.patientType === 'existing' && !appointmentForm.patientId) {
+      toast.error('Please select an existing patient.')
+      return
+    }
+    if (
+      appointmentForm.patientType === 'new' &&
+      (!appointmentForm.patientFirstName.trim() || !appointmentForm.patientLastName.trim() || !appointmentForm.patientPhone.trim())
+    ) {
+      toast.error('Please enter the new patient details.')
+      return
+    }
+
+    const selectedDoctor = doctors.find((doctor) => doctor.id === appointmentForm.doctorId)
+    if (!selectedDoctor) {
+      toast.error('Selected doctor is not available.')
+      return
+    }
+
+    const timeInfo = parseTimeInput(appointmentForm.appointmentTime)
+    if (!timeInfo) {
+      toast.error('Please use a valid time (e.g., 09:00 AM).')
+      return
+    }
+
+    try {
+      const doctorDoc = await getDoc(doc(db, 'doctors', selectedDoctor.id))
+      const doctorData = doctorDoc.exists() ? doctorDoc.data() : {}
+      const workingHours = String(doctorData?.workingHours || selectedDoctor.workingHours || '09:00 AM - 05:00 PM')
+      const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
+      const workingRange = parseWorkingRange(workingHours)
+      if (!workingRange) {
+        toast.error('Doctor working hours are not configured.')
+        return
+      }
+
+      const appointmentDay = new Date(appointmentForm.appointmentDate).toLocaleDateString('en-US', { weekday: 'long' })
+      if (
+        availability.length > 0 &&
+        !availability.some((day: string) => day.toLowerCase() === appointmentDay.toLowerCase())
+      ) {
+        toast.error(`Doctor is not available on ${appointmentDay}.`)
+        return
+      }
+
+      if (timeInfo.minutes < workingRange.start || timeInfo.minutes > workingRange.end) {
+        toast.error('Selected time is outside doctor working hours.')
+        return
+      }
+
+      const dateSnapshot = await getDocs(
+        query(collection(db, 'appointments'), where('appointmentDate', '==', appointmentForm.appointmentDate))
+      )
+
+      const timeConflicts = dateSnapshot.docs
+        .map((docSnapshot) => docSnapshot.data())
+        .filter((appointment) => {
+          const apptTime = String(appointment.appointmentTime || appointment.timeSlot || '').trim()
+          if (!apptTime) return false
+          const apptMinutes = parseTimeToMinutes(apptTime)
+          if (apptMinutes !== null) {
+            return apptMinutes === timeInfo.minutes
+          }
+          return apptTime === timeInfo.label
+        })
+
+      const doctorConflict = timeConflicts.some(
+        (appointment) => appointment.doctorId === selectedDoctor.id
+      )
+      if (doctorConflict) {
+        toast.error('This time slot is already booked for the selected doctor.')
+        return
+      }
+
+      let patientId = ''
+      let patientFirstName = ''
+      let patientLastName = ''
+      let patientEmail = ''
+      let patientPhone = ''
+
+      if (appointmentForm.patientType === 'existing') {
+        const patient = patients.find((item) => item.id === appointmentForm.patientId)
+        if (!patient) {
+          toast.error('Selected patient was not found.')
+          return
+        }
+        patientId = patient.id
+        patientFirstName = patient.firstName
+        patientLastName = patient.lastName
+        patientEmail = patient.email
+        patientPhone = patient.phone
+      } else {
+        patientFirstName = appointmentForm.patientFirstName.trim()
+        patientLastName = appointmentForm.patientLastName.trim()
+        patientEmail = appointmentForm.patientEmail.trim()
+        patientPhone = appointmentForm.patientPhone.trim()
+
+        let existingPatientId = ''
+        if (patientEmail) {
+          const existingPatientQuery = query(
+            collection(db, 'patients'),
+            where('email', '==', patientEmail)
+          )
+          const patientSnapshot = await getDocs(existingPatientQuery)
+          if (!patientSnapshot.empty) {
+            existingPatientId = patientSnapshot.docs[0].id
+          }
+        }
+
+        if (!existingPatientId && patientPhone) {
+          const existingPatientQuery = query(
+            collection(db, 'patients'),
+            where('phone', '==', patientPhone)
+          )
+          const patientSnapshot = await getDocs(existingPatientQuery)
+          if (!patientSnapshot.empty) {
+            existingPatientId = patientSnapshot.docs[0].id
+          }
+        }
+
+        if (existingPatientId) {
+          patientId = existingPatientId
+        } else {
+          const patientRef = await addDoc(collection(db, 'patients'), {
+            firstName: patientFirstName,
+            lastName: patientLastName,
+            email: patientEmail,
+            phone: patientPhone,
+            createdAt: serverTimestamp(),
+          })
+          patientId = patientRef.id
+        }
+      }
+
+      const patientConflict = timeConflicts.some((appointment) => {
+        if (patientId && appointment.patientId) {
+          return appointment.patientId === patientId
+        }
+        if (patientEmail && appointment.patientEmail) {
+          return appointment.patientEmail === patientEmail
+        }
+        return patientPhone && appointment.patientPhone === patientPhone
+      })
+      if (patientConflict) {
+        toast.error('This patient already has an appointment at this time.')
+        return
+      }
+
+      const appointmentNumber = `APT-${appointmentForm.appointmentDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
+      const appointmentType = appointmentForm.appointmentType.trim() || selectedDoctor.specialization || 'General Consultation'
+      const patientName = `${patientFirstName} ${patientLastName}`.trim()
+
+      await addDoc(collection(db, 'appointments'), {
+        appointmentNumber,
+        appointmentType,
+        appointmentDate: appointmentForm.appointmentDate,
+        appointmentTime: timeInfo.label,
+        status: 'SCHEDULED',
+        checkedIn: false,
+        queueNumber: null,
+        patientId,
+        patientName,
+        patientFirstName,
+        patientLastName,
+        patientEmail,
+        patientPhone,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        specialty: selectedDoctor.specialization,
+        reasonForVisit: appointmentForm.reasonForVisit.trim(),
+        symptoms: appointmentForm.symptoms.trim(),
+        createdAt: serverTimestamp(),
+      })
+
+      await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
+        bookedSlots: arrayUnion(`${appointmentForm.appointmentDate}|${timeInfo.label}`),
+      })
+
+      toast.success('Appointment created successfully')
+      setShowAppointmentDialog(false)
+      resetAppointmentForm()
+      fetchAppointments()
+      fetchDoctorSchedules()
+      fetchStats()
+      fetchPatientsList()
+    } catch (error) {
+      console.error('Failed to create appointment:', error)
+      toast.error('Unable to create appointment. Please try again.')
     }
   }
 
@@ -1037,6 +1321,13 @@ export default function AdminDashboard() {
                     </Select>
                     <Button onClick={handleSearch} className="maternal-gradient text-sm sm:text-base">
                       Search
+                    </Button>
+                    <Button
+                      onClick={openAddAppointment}
+                      className="bg-maternal-primary hover:bg-maternal-primary/90 text-white text-sm sm:text-base"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Appointment
                     </Button>
                   </div>
                 </div>
@@ -1597,6 +1888,213 @@ export default function AdminDashboard() {
               </Button>
               <Button onClick={handleSavePatient} className="flex-1 maternal-gradient">
                 {editingPatient ? 'Update Patient' : 'Create Patient'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Appointment Dialog */}
+      <Dialog
+        open={showAppointmentDialog}
+        onOpenChange={(open) => {
+          setShowAppointmentDialog(open)
+          if (!open) resetAppointmentForm()
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Create Appointment</DialogTitle>
+            <DialogDescription>Schedule a new appointment with a doctor.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Patient Type</Label>
+              <Select
+                value={appointmentForm.patientType}
+                onValueChange={(value) =>
+                  setAppointmentForm((prev) => ({
+                    ...prev,
+                    patientType: value,
+                    patientId: '',
+                    patientFirstName: '',
+                    patientLastName: '',
+                    patientEmail: '',
+                    patientPhone: '',
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select patient type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="existing">Registered Patient</SelectItem>
+                  <SelectItem value="new">New Patient</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {appointmentForm.patientType === 'existing' ? (
+              <div className="grid gap-2">
+                <Label>Select Patient</Label>
+                <Select
+                  value={appointmentForm.patientId}
+                  onValueChange={(value) => {
+                    const patient = patients.find((item) => item.id === value)
+                    setAppointmentForm((prev) => ({
+                      ...prev,
+                      patientId: value,
+                      patientFirstName: patient?.firstName || '',
+                      patientLastName: patient?.lastName || '',
+                      patientEmail: patient?.email || '',
+                      patientPhone: patient?.phone || '',
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {patients.map((patient) => (
+                      <SelectItem key={patient.id} value={patient.id}>
+                        {patient.firstName} {patient.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>First Name</Label>
+                  <Input
+                    value={appointmentForm.patientFirstName}
+                    onChange={(e) =>
+                      setAppointmentForm((prev) => ({ ...prev, patientFirstName: e.target.value }))
+                    }
+                    placeholder="First name"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Last Name</Label>
+                  <Input
+                    value={appointmentForm.patientLastName}
+                    onChange={(e) =>
+                      setAppointmentForm((prev) => ({ ...prev, patientLastName: e.target.value }))
+                    }
+                    placeholder="Last name"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={appointmentForm.patientEmail}
+                    onChange={(e) =>
+                      setAppointmentForm((prev) => ({ ...prev, patientEmail: e.target.value }))
+                    }
+                    placeholder="Email (optional)"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Phone</Label>
+                  <Input
+                    value={appointmentForm.patientPhone}
+                    onChange={(e) =>
+                      setAppointmentForm((prev) => ({ ...prev, patientPhone: e.target.value }))
+                    }
+                    placeholder="Phone number"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Doctor</Label>
+                <Select
+                  value={appointmentForm.doctorId}
+                  onValueChange={(value) => {
+                    const doctor = doctors.find((item) => item.id === value)
+                    setAppointmentForm((prev) => ({
+                      ...prev,
+                      doctorId: value,
+                      appointmentType: prev.appointmentType || doctor?.specialization || '',
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select doctor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((doctor) => (
+                      <SelectItem key={doctor.id} value={doctor.id}>
+                        {formatDoctorName(doctor.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Appointment Type</Label>
+                <Input
+                  value={appointmentForm.appointmentType}
+                  onChange={(e) =>
+                    setAppointmentForm((prev) => ({ ...prev, appointmentType: e.target.value }))
+                  }
+                  placeholder="Consultation type"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={appointmentForm.appointmentDate}
+                  onChange={(e) =>
+                    setAppointmentForm((prev) => ({ ...prev, appointmentDate: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Time</Label>
+                <Input
+                  value={appointmentForm.appointmentTime}
+                  onChange={(e) =>
+                    setAppointmentForm((prev) => ({ ...prev, appointmentTime: e.target.value }))
+                  }
+                  placeholder="09:00 AM"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Reason for Visit</Label>
+              <Textarea
+                value={appointmentForm.reasonForVisit}
+                onChange={(e) =>
+                  setAppointmentForm((prev) => ({ ...prev, reasonForVisit: e.target.value }))
+                }
+                placeholder="Reason for visit"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Symptoms</Label>
+              <Textarea
+                value={appointmentForm.symptoms}
+                onChange={(e) =>
+                  setAppointmentForm((prev) => ({ ...prev, symptoms: e.target.value }))
+                }
+                placeholder="Symptoms (optional)"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setShowAppointmentDialog(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleCreateAppointment} className="flex-1 maternal-gradient">
+                Create Appointment
               </Button>
             </div>
           </div>
