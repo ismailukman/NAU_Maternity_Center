@@ -36,6 +36,7 @@ import { toast } from 'sonner'
 import { auth, db } from '@/lib/firebase-config'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
+  onSnapshot,
   collection,
   addDoc,
   deleteDoc,
@@ -95,6 +96,7 @@ interface Appointment {
       lastName: string
     }
   }
+  checkedOutTime?: string | null
 }
 
 interface Stats {
@@ -202,6 +204,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<Stats | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [liveAppointments, setLiveAppointments] = useState<Appointment[]>([])
   const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>([])
   const [doctors, setDoctors] = useState<DoctorProfile[]>([])
   const [patients, setPatients] = useState<PatientProfile[]>([])
@@ -214,6 +217,7 @@ export default function AdminDashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const [activeTab, setActiveTab] = useState('appointments')
+  const [now, setNow] = useState<Date>(new Date())
   const [showDoctorDialog, setShowDoctorDialog] = useState(false)
   const [showPatientDialog, setShowPatientDialog] = useState(false)
   const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
@@ -284,6 +288,57 @@ export default function AdminDashboard() {
     fetchDoctorSchedules()
     fetchDoctorsList()
     fetchPatientsList()
+  }, [admin])
+
+  useEffect(() => {
+    if (!admin) return
+    const interval = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(interval)
+  }, [admin])
+
+  useEffect(() => {
+    if (!admin) return
+    const liveQuery = query(
+      collection(db, 'appointments'),
+      where('status', '==', 'CHECKED_IN')
+    )
+    const unsubscribe = onSnapshot(liveQuery, (snapshot) => {
+      const mapped = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data()
+        const patientParts = buildNameParts(data.patientName || '')
+        const doctorParts = buildNameParts(
+          String(data.doctorName || '').replace(/^Dr\\.?\\s*/, '')
+        )
+        return {
+          id: docSnapshot.id,
+          appointmentNumber: data.appointmentNumber || docSnapshot.id,
+          appointmentType: data.appointmentType || data.specialty || 'General Consultation',
+          appointmentDate: normalizeDateValue(data.appointmentDate),
+          appointmentTime: data.appointmentTime || data.timeSlot || '',
+          status: data.status || 'CHECKED_IN',
+          checkedIn: true,
+          checkInTime: data.checkInTime ? normalizeDateValue(data.checkInTime) : null,
+          checkedOutTime: data.checkedOutTime ? normalizeDateValue(data.checkedOutTime) : null,
+          queueNumber: data.queueNumber || null,
+          patient: {
+            user: {
+              firstName: data.patientFirstName || patientParts.firstName,
+              lastName: data.patientLastName || patientParts.lastName,
+              email: data.patientEmail || '',
+              phone: data.patientPhone || '',
+            },
+          },
+          doctor: {
+            user: {
+              firstName: data.doctorFirstName || doctorParts.firstName,
+              lastName: data.doctorLastName || doctorParts.lastName,
+            },
+          },
+        } as Appointment
+      })
+      setLiveAppointments(mapped)
+    })
+    return () => unsubscribe()
   }, [admin])
 
   useEffect(() => {
@@ -387,6 +442,7 @@ export default function AdminDashboard() {
             status: data.status || 'PENDING',
             checkedIn: Boolean(data.checkedIn),
             checkInTime: data.checkInTime ? normalizeDateValue(data.checkInTime) : null,
+            checkedOutTime: data.checkedOutTime ? normalizeDateValue(data.checkedOutTime) : null,
             queueNumber: data.queueNumber || null,
             patient: {
               user: {
@@ -749,6 +805,32 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleCheckout = async (appointmentId: string) => {
+    try {
+      await updateDoc(doc(db, 'appointments', appointmentId), {
+        status: 'COMPLETED',
+        checkedIn: false,
+        checkedOutTime: new Date().toISOString(),
+      })
+      toast.success('Patient checked out')
+      fetchAppointments()
+      fetchStats()
+      fetchDoctorSchedules()
+    } catch (error) {
+      toast.error('Unable to check out patient')
+    }
+  }
+
+  const formatElapsed = (start?: string | null) => {
+    if (!start) return '0m'
+    const startDate = new Date(start)
+    const diffMs = now.getTime() - startDate.getTime()
+    const minutes = Math.max(Math.floor(diffMs / 60000), 0)
+    const hours = Math.floor(minutes / 60)
+    const remainder = minutes % 60
+    return hours > 0 ? `${hours}h ${remainder}m` : `${remainder}m`
+  }
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { color: string; icon: any }> = {
       SCHEDULED: { color: 'bg-blue-100 text-blue-800 border-blue-300', icon: Clock },
@@ -950,6 +1032,63 @@ export default function AdminDashboard() {
               </CardHeader>
 
               <CardContent className="p-2 sm:p-6">
+                <div className="mb-6 rounded-2xl border border-maternal-light/40 bg-gradient-to-r from-maternal-lighter/70 via-white to-maternal-light/40 p-4 sm:p-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Live Check-Ins</h3>
+                      <p className="text-sm text-gray-600">
+                        Real-time view of patients currently with doctors
+                      </p>
+                    </div>
+                    <Badge className="bg-maternal-primary text-white border-transparent flex items-center gap-2 w-fit">
+                      <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                      Live
+                    </Badge>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {liveAppointments.map((appointment) => (
+                      <div
+                        key={appointment.id}
+                        className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-maternal-primary">
+                            {appointment.queueNumber ? `Queue #${appointment.queueNumber}` : 'In Progress'}
+                          </span>
+                          <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                            Checked In
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-gray-900">
+                          {appointment.patient.user.firstName} {appointment.patient.user.lastName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Dr. {appointment.doctor.user.firstName} {appointment.doctor.user.lastName}
+                        </p>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            Time with doctor
+                            <div className="text-sm font-semibold text-gray-900">
+                              {formatElapsed(appointment.checkInTime)}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="maternal-gradient text-xs"
+                            onClick={() => handleCheckout(appointment.id)}
+                          >
+                            Check Out
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {liveAppointments.length === 0 && (
+                      <div className="col-span-full text-center py-6 text-sm text-gray-600">
+                        No patients are currently checked in.
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="overflow-x-auto -mx-2 sm:mx-0">
                   <table className="w-full min-w-[800px]">
                     <thead>
