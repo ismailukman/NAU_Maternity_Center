@@ -1249,6 +1249,92 @@ export default function AdminDashboard() {
     }
   }
 
+  const handlePrintAppointment = (appointment: Appointment) => {
+    const dateLabel = appointment.appointmentDate
+      ? new Date(appointment.appointmentDate).toLocaleDateString()
+      : ''
+    const doctorName = formatDoctorName(
+      `${appointment.doctor.user.firstName} ${appointment.doctor.user.lastName}`
+    )
+    const patientName = `${appointment.patient.user.firstName} ${appointment.patient.user.lastName}`.trim()
+
+    const printWindow = window.open('', '_blank', 'width=720,height=600')
+    if (!printWindow) {
+      toast.error('Unable to open print window')
+      return
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Appointment Card</title>
+          <style>
+            body { font-family: "Times New Roman", Times, serif; margin: 24px; color: #111; }
+            .card { border: 2px solid #d1d5db; border-radius: 12px; padding: 24px; max-width: 520px; margin: 0 auto; }
+            h1 { font-size: 20px; margin: 0 0 8px; }
+            .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+            .row { display: flex; justify-content: space-between; gap: 16px; margin: 8px 0; }
+            .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; }
+            .value { font-size: 14px; font-weight: 600; }
+            .footer { margin-top: 16px; font-size: 11px; color: #6b7280; text-align: center; }
+            @media print { body { margin: 0; } .card { border: none; border-radius: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Appointment Card</h1>
+            <div class="subtitle">Natasha Akpoti-Uduaghan Maternity Centre</div>
+            <div class="row">
+              <div>
+                <div class="label">Appointment #</div>
+                <div class="value">${appointment.appointmentNumber}</div>
+              </div>
+              <div>
+                <div class="label">Status</div>
+                <div class="value">${appointment.status}</div>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="label">Patient</div>
+                <div class="value">${patientName}</div>
+              </div>
+              <div>
+                <div class="label">Doctor</div>
+                <div class="value">${doctorName}</div>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="label">Date</div>
+                <div class="value">${dateLabel}</div>
+              </div>
+              <div>
+                <div class="label">Time</div>
+                <div class="value">${appointment.appointmentTime || ''}</div>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="label">Type</div>
+                <div class="value">${appointment.appointmentType}</div>
+              </div>
+              <div>
+                <div class="label">Queue</div>
+                <div class="value">${appointment.queueNumber || 'N/A'}</div>
+              </div>
+            </div>
+            <div class="footer">Please arrive 10 minutes early for check-in.</div>
+          </div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }
+
   const handleCheckout = async (appointmentId: string) => {
     try {
       const liveAppointment = liveAppointments.find((appointment) => appointment.id === appointmentId)
@@ -1621,6 +1707,14 @@ export default function AdminDashboard() {
                                 }}
                               >
                                 <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-gray-300 text-gray-700 hover:bg-gray-50 px-2 sm:px-3"
+                                onClick={() => handlePrintAppointment(appointment)}
+                              >
+                                Print
                               </Button>
                               <Button
                                 size="sm"
