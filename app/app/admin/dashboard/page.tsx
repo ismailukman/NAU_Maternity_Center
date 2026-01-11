@@ -1519,9 +1519,16 @@ export default function AdminDashboard() {
         updates.timeWithDoctor = '0H:00M:00s'
       }
 
-      const previousSlot = `${selectedAppointment.appointmentDate}|${selectedAppointment.appointmentTime}`
+      const hasPreviousSlot = Boolean(selectedAppointment.appointmentDate && selectedAppointment.appointmentTime)
+      const previousSlot = hasPreviousSlot
+        ? `${selectedAppointment.appointmentDate}|${selectedAppointment.appointmentTime}`
+        : ''
       const nextSlot = `${appointmentDate}|${timeInfo.label}`
-      if (selectedAppointment.doctorId && (selectedAppointment.doctorId !== selectedDoctor.id || previousSlot !== nextSlot)) {
+      if (
+        hasPreviousSlot &&
+        selectedAppointment.doctorId &&
+        (selectedAppointment.doctorId !== selectedDoctor.id || previousSlot !== nextSlot)
+      ) {
         await updateDoc(doc(db, 'doctors', selectedAppointment.doctorId), {
           bookedSlots: arrayRemove(previousSlot),
         })
@@ -1542,7 +1549,8 @@ export default function AdminDashboard() {
       fetchDoctorSchedules()
     } catch (error) {
       console.error('Failed to update appointment:', error)
-      toast.error('An error occurred')
+      const message = error instanceof Error ? error.message : 'An error occurred'
+      toast.error(message)
     }
   }
 
