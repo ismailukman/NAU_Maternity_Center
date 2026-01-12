@@ -368,9 +368,12 @@ export default function HomePage() {
               </div>
 
               <div className="relative hidden md:block animate-fade-in">
-                <Badge className="mb-6 bg-maternal-light text-maternal-primary px-4 py-2 text-sm font-semibold shadow-sm hover:shadow-md transition-shadow">
-                  ✨ Trusted Maternity Care
-                </Badge>
+                <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-5 py-2 text-sm font-semibold text-amber-700 shadow-sm">
+                  <span className="text-lg">🥇</span>
+                  <span className="bg-gradient-to-r from-amber-600 to-emerald-600 bg-clip-text text-transparent">
+                    5th Time Winner of Gold Medal in Maternity and Pediatric National Award
+                  </span>
+                </div>
                 <div className="relative z-10 group">
                   <div className="absolute -top-4 -left-4 w-72 h-72 bg-maternal-primary rounded-full opacity-20 blur-3xl group-hover:opacity-30 transition-opacity"></div>
                   <div className="absolute -bottom-4 -right-4 w-72 h-72 bg-maternal-secondary rounded-full opacity-20 blur-3xl group-hover:opacity-30 transition-opacity"></div>
