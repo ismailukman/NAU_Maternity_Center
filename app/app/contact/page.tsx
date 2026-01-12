@@ -81,9 +81,9 @@ export default function ContactPage() {
                       <div>
                         <p className="font-semibold text-gray-900">Address</p>
                         <p className="text-gray-600 text-sm">
-                          123 Care Street<br />
-                          Medical District<br />
-                          Your City, State 12345
+                          123 Ohi market road<br />
+                          Ihima, Akehi LGA<br />
+                          Kogi State Nigeria
                         </p>
                       </div>
                     </div>
