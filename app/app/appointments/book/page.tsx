@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ const TIME_SLOTS = [
 ]
 
 export default function BookAppointmentPage() {
+  const searchParams = useSearchParams()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -83,6 +85,7 @@ export default function BookAppointmentPage() {
     symptoms: '',
   })
   const [doctors, setDoctors] = useState(MOCK_DOCTORS)
+  const preselectedDoctorId = searchParams?.get('doctor') || ''
 
   useEffect(() => {
     const loadDoctors = async () => {
@@ -114,6 +117,18 @@ export default function BookAppointmentPage() {
 
     loadDoctors()
   }, [])
+
+  useEffect(() => {
+    if (!preselectedDoctorId) return
+    const matchedDoctor = doctors.find((doctor) => doctor.id === preselectedDoctorId)
+    if (!matchedDoctor) return
+    setFormData((prev) => ({
+      ...prev,
+      specialty: matchedDoctor.specialization || prev.specialty,
+      doctorId: matchedDoctor.id,
+    }))
+    setStep((currentStep) => (currentStep < 3 ? 3 : currentStep))
+  }, [doctors, preselectedDoctorId])
 
   const selectedSpecialty = SPECIALTIES.find(s => s.id === formData.specialty)
   const availableDoctors = useMemo(
