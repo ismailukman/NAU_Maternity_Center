@@ -100,15 +100,32 @@ export default function BookAppointmentClient() {
         const mappedDoctors = snapshot.docs.map((docSnapshot) => {
           const data = docSnapshot.data()
           const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
-          const specializationName = String(data.specialization || '').toLowerCase()
-          const specialtyMatch = SPECIALTIES.find((specialty) =>
-            specializationName.includes(specialty.name.toLowerCase())
+          const rawSpecialties = Array.isArray(data.specialties)
+            ? data.specialties
+            : data.specialization
+              ? [data.specialization]
+              : []
+          const specialties = rawSpecialties
+            .map((item: string) => String(item).trim())
+            .filter(Boolean)
+          const specialtyIds = specialties
+            .map((specialty) =>
+              SPECIALTIES.find((option) =>
+                specialty.toLowerCase().includes(option.name.toLowerCase())
+              )?.id
+            )
+            .filter((value): value is string => Boolean(value))
+          const fallbackSpecialtyName = String(data.specialization || '').toLowerCase()
+          const fallbackMatch = SPECIALTIES.find((specialty) =>
+            fallbackSpecialtyName.includes(specialty.name.toLowerCase())
           )
 
           return {
             id: docSnapshot.id,
             name: name || `Dr. ${docSnapshot.id}`,
-            specialization: data.specializationId || specialtyMatch?.id || 'consultation',
+            specialization: data.specializationId || fallbackMatch?.id || 'consultation',
+            specialties,
+            specialtyIds,
             rating: data.rating || 4.8,
             reviews: data.reviews || 0,
             fee: data.fee || 15000,
@@ -139,10 +156,16 @@ export default function BookAppointmentClient() {
   const availableDoctors = useMemo(() => {
     if (!formData.specialty) return []
     if (SERVICE_TYPES.has(formData.specialty)) return doctors
-    return doctors.filter((doctor) => doctor.specialization === formData.specialty)
+    return doctors.filter((doctor) =>
+      doctor.specialtyIds?.includes(formData.specialty) || doctor.specialization === formData.specialty
+    )
   }, [doctors, formData.specialty])
-const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
-const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
+  const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
+  const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
+  const isServiceType = SERVICE_TYPES.has(formData.specialty)
+  const doctorSpecialtyOptions = selectedDoctor?.specialties?.length
+    ? selectedDoctor.specialties
+    : []
   const displayDoctorName = (name: string) => {
     const trimmed = name.trim()
     if (!trimmed) return ''
@@ -180,12 +203,21 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
       toast.error('Please select a specialty')
       return
     }
-    if (step === 2 && !formData.doctorId) {
+    if (step === 2 && !formData.doctorId && !isServiceType) {
       toast.error('Please select a doctor')
       return
     }
     if (step === 3 && (!formData.date || !formData.timeSlot)) {
       toast.error('Please select date and time')
+      return
+    }
+    if (
+      step === 3 &&
+      selectedDoctor &&
+      doctorSpecialtyOptions.length > 1 &&
+      !formData.appointmentType
+    ) {
+      toast.error('Please select a specialty for this doctor')
       return
     }
     if (step === 4 && (!formData.patientName || !formData.phone || !formData.reasonForVisit || !formData.gender || !formData.dateOfBirth)) {
@@ -196,42 +228,48 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
   }
 
   const handleSubmit = async () => {
-    if (!selectedDoctor) {
+    if (!selectedDoctor && !isServiceType) {
       toast.error('Please select a doctor before confirming.')
+      return
+    }
+    if (selectedDoctor && doctorSpecialtyOptions.length > 1 && !formData.appointmentType) {
+      toast.error('Please select a specialty for this doctor.')
       return
     }
 
     setSubmitting(true)
     try {
-      const doctorSnapshot = await getDocs(
-        query(collection(db, 'doctors'), where('__name__', '==', selectedDoctor.id))
-      )
-      const doctorData = doctorSnapshot.docs[0]?.data()
-      const workingHours = doctorData?.workingHours || '09:00 AM - 05:00 PM'
-      const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
-      const workingRange = parseWorkingHours(workingHours)
-      const slotMinutes = parseTimeToMinutes(formData.timeSlot)
+      if (selectedDoctor) {
+        const doctorSnapshot = await getDocs(
+          query(collection(db, 'doctors'), where('__name__', '==', selectedDoctor.id))
+        )
+        const doctorData = doctorSnapshot.docs[0]?.data()
+        const workingHours = doctorData?.workingHours || '09:00 AM - 05:00 PM'
+        const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
+        const workingRange = parseWorkingHours(workingHours)
+        const slotMinutes = parseTimeToMinutes(formData.timeSlot)
 
-      if (!workingRange || slotMinutes === null) {
-        toast.error('Unable to validate the selected time slot.')
-        setSubmitting(false)
-        return
-      }
+        if (!workingRange || slotMinutes === null) {
+          toast.error('Unable to validate the selected time slot.')
+          setSubmitting(false)
+          return
+        }
 
-      const dayName = dayNameForDate(formData.date)
-      if (
-        availability.length > 0 &&
-        !availability.some((day) => day.toLowerCase() === dayName.toLowerCase())
-      ) {
-        toast.error(`Dr. ${selectedDoctor.name} is not available on ${dayName}.`)
-        setSubmitting(false)
-        return
-      }
+        const dayName = dayNameForDate(formData.date)
+        if (
+          availability.length > 0 &&
+          !availability.some((day) => day.toLowerCase() === dayName.toLowerCase())
+        ) {
+          toast.error(`Dr. ${selectedDoctor.name} is not available on ${dayName}.`)
+          setSubmitting(false)
+          return
+        }
 
-      if (slotMinutes < workingRange.start || slotMinutes > workingRange.end) {
-        toast.error('Selected time is outside doctor working hours.')
-        setSubmitting(false)
-        return
+        if (slotMinutes < workingRange.start || slotMinutes > workingRange.end) {
+          toast.error('Selected time is outside doctor working hours.')
+          setSubmitting(false)
+          return
+        }
       }
 
       const dateSnapshot = await getDocs(
@@ -245,13 +283,15 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
           return time === formData.timeSlot
         })
 
-      const doctorConflict = timeConflicts.some(
-        (appointment) => appointment.doctorId === selectedDoctor.id
-      )
-      if (doctorConflict) {
-        toast.error('This time slot is already booked for the selected doctor.')
-        setSubmitting(false)
-        return
+      if (selectedDoctor) {
+        const doctorConflict = timeConflicts.some(
+          (appointment) => appointment.doctorId === selectedDoctor.id
+        )
+        if (doctorConflict) {
+          toast.error('This time slot is already booked for the selected doctor.')
+          setSubmitting(false)
+          return
+        }
       }
 
       const patientConflict = timeConflicts.some((appointment) => {
@@ -322,17 +362,19 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
         patientEmail: formData.email || '',
         patientPhone: formData.phone,
         patientGender: formData.gender,
-        doctorId: selectedDoctor.id,
-        doctorName: selectedDoctor.name,
+        doctorId: selectedDoctor?.id || null,
+        doctorName: selectedDoctor?.name || 'To be assigned',
         specialty: formData.specialty,
         reasonForVisit: formData.reasonForVisit,
         symptoms: formData.symptoms,
         createdAt: serverTimestamp(),
       })
 
-      await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
-        bookedSlots: arrayUnion(`${formData.date}|${formData.timeSlot}`),
-      })
+      if (selectedDoctor) {
+        await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
+          bookedSlots: arrayUnion(`${formData.date}|${formData.timeSlot}`),
+        })
+      }
 
       toast.success('Appointment booked successfully!', {
         description: 'You will receive a confirmation SMS and email shortly.',
@@ -456,11 +498,33 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
                       Choose Your Doctor
                     </h2>
                     <p className="text-gray-600">
-                      Select from our {selectedSpecialty?.name} specialists
+                      {isServiceType
+                        ? 'Select a doctor or continue without a specific doctor.'
+                        : `Select from our ${selectedSpecialty?.name} specialists`}
                     </p>
                   </div>
 
                   <div className="space-y-4">
+                    {isServiceType && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData({ ...formData, doctorId: '', appointmentType: formData.appointmentType || selectedSpecialtyName })
+                          setStep(3)
+                        }}
+                        className="w-full p-5 border-2 border-dashed rounded-lg text-left hover:border-maternal-primary hover:bg-maternal-lighter transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-lg font-semibold text-gray-900">Any Available Doctor</p>
+                            <p className="text-sm text-gray-600">
+                              We will assign a qualified specialist for this service.
+                            </p>
+                          </div>
+                          <span className="text-sm font-semibold text-maternal-primary">Skip</span>
+                        </div>
+                      </button>
+                    )}
                     {availableDoctors.map((doctor) => (
                       <button
                         key={doctor.id}
@@ -550,6 +614,25 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
                         ))}
                       </div>
                     </div>
+                    {selectedDoctor && doctorSpecialtyOptions.length > 1 && (
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Doctor Specialty
+                        </label>
+                        <select
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-maternal-primary focus:outline-none focus:ring-2 focus:ring-maternal-primary/20"
+                          value={formData.appointmentType}
+                          onChange={(e) => setFormData({ ...formData, appointmentType: e.target.value })}
+                        >
+                          <option value="">Select specialty</option>
+                          {doctorSpecialtyOptions.map((specialty) => (
+                            <option key={specialty} value={specialty}>
+                              {specialty}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -707,7 +790,7 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
                     <div className="flex justify-between items-center border-b pb-3">
                       <span className="text-gray-600">Doctor:</span>
                       <span className="font-semibold">
-                        {selectedDoctor ? displayDoctorName(selectedDoctor.name) : ''}
+                        {selectedDoctor ? displayDoctorName(selectedDoctor.name) : 'Any available doctor'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center border-b pb-3">
@@ -729,7 +812,7 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
                     <div className="flex justify-between items-center pt-3">
                       <span className="text-lg font-semibold text-gray-900">Total Fee:</span>
                       <span className="text-2xl font-bold text-maternal-primary">
-                        ₦{selectedDoctor?.fee.toLocaleString()}
+                        {selectedDoctor ? `₦${selectedDoctor.fee.toLocaleString()}` : '₦—'}
                       </span>
                     </div>
                   </div>
