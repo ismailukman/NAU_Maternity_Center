@@ -309,6 +309,10 @@ export default function BookAppointmentClient() {
   }
 
   const handleSubmit = async () => {
+    if (!auth.currentUser) {
+      toast.error('Booking can only be done by an Admin.')
+      return
+    }
     if (!selectedDoctor && !isServiceType) {
       toast.error('Please select a doctor before confirming.')
       return
