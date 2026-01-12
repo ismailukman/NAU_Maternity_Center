@@ -74,6 +74,9 @@ export default function BookAppointmentPage() {
     timeSlot: '',
     appointmentType: '',
     patientName: '',
+    gender: '',
+    dateOfBirth: '',
+    address: '',
     phone: '',
     email: '',
     reasonForVisit: '',
@@ -164,7 +167,7 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
       toast.error('Please select date and time')
       return
     }
-    if (step === 4 && (!formData.patientName || !formData.phone || !formData.reasonForVisit)) {
+    if (step === 4 && (!formData.patientName || !formData.phone || !formData.reasonForVisit || !formData.gender || !formData.dateOfBirth)) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -255,6 +258,15 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
         const patientSnapshot = await getDocs(existingPatientQuery)
         if (!patientSnapshot.empty) {
           patientId = patientSnapshot.docs[0].id
+          await updateDoc(doc(db, 'patients', patientId), {
+            firstName: patientFirstName,
+            lastName: patientLastName,
+            phone: formData.phone,
+            gender: formData.gender,
+            dateOfBirth: formData.dateOfBirth,
+            address: formData.address,
+            updatedAt: serverTimestamp(),
+          })
         }
       }
 
@@ -264,6 +276,9 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
           lastName: patientLastName,
           email: formData.email || '',
           phone: formData.phone,
+          gender: formData.gender,
+          dateOfBirth: formData.dateOfBirth,
+          address: formData.address,
           createdAt: serverTimestamp(),
         })
         patientId = patientRef.id
@@ -285,6 +300,7 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
         patientLastName,
         patientEmail: formData.email || '',
         patientPhone: formData.phone,
+        patientGender: formData.gender,
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
         specialty: formData.specialty,
@@ -308,6 +324,9 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
         timeSlot: '',
         appointmentType: '',
         patientName: '',
+        gender: '',
+        dateOfBirth: '',
+        address: '',
         phone: '',
         email: '',
         reasonForVisit: '',
@@ -561,6 +580,43 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
                         />
                       </div>
                     </div>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Gender *
+                        </label>
+                        <select
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-maternal-primary focus:outline-none focus:ring-2 focus:ring-maternal-primary/20"
+                          value={formData.gender}
+                          onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                        >
+                          <option value="">Select gender</option>
+                          <option value="Female">Female</option>
+                          <option value="Male">Male</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Date of Birth *
+                        </label>
+                        <Input
+                          type="date"
+                          value={formData.dateOfBirth}
+                          onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Address
+                      </label>
+                      <Input
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="Residential address"
+                      />
+                    </div>
 
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -610,6 +666,22 @@ const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
                       <span className="font-semibold">
                         {SPECIALTIES.find(s => s.id === formData.specialty)?.name}
                       </span>
+                    </div>
+                    <div className="flex justify-between items-center border-b pb-3">
+                      <span className="text-gray-600">Patient:</span>
+                      <span className="font-semibold">{formData.patientName}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b pb-3">
+                      <span className="text-gray-600">Gender:</span>
+                      <span className="font-semibold">{formData.gender}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b pb-3">
+                      <span className="text-gray-600">Date of Birth:</span>
+                      <span className="font-semibold">{formData.dateOfBirth}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b pb-3">
+                      <span className="text-gray-600">Phone:</span>
+                      <span className="font-semibold">{formData.phone}</span>
                     </div>
                     <div className="flex justify-between items-center border-b pb-3">
                       <span className="text-gray-600">Doctor:</span>
