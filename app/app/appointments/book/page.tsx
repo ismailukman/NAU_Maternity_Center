@@ -25,13 +25,15 @@ import {
 } from 'firebase/firestore'
 
 const SPECIALTIES = [
+  { id: 'vaccination', name: 'Vaccination', icon: CheckCircle, color: 'text-teal-500' },
+  { id: 'ultrasound', name: 'Ultrasound', icon: Activity, color: 'text-blue-500' },
   { id: 'prenatal', name: 'Prenatal Care', icon: Heart, color: 'text-pink-500' },
   { id: 'postnatal', name: 'Postnatal Care', icon: Baby, color: 'text-purple-500' },
-  { id: 'ultrasound', name: 'Ultrasound', icon: Activity, color: 'text-blue-500' },
-  { id: 'pediatrics', name: 'Pediatrics', icon: Stethoscope, color: 'text-green-500' },
   { id: 'consultation', name: 'General Consultation', icon: Calendar, color: 'text-orange-500' },
-  { id: 'vaccination', name: 'Vaccination', icon: CheckCircle, color: 'text-teal-500' },
+  { id: 'pediatrics', name: 'Pediatrics', icon: Stethoscope, color: 'text-green-500' },
 ]
+
+const SERVICE_TYPES = new Set(['vaccination', 'ultrasound', 'prenatal', 'postnatal'])
 
 const MOCK_DOCTORS = [
   {
@@ -131,10 +133,11 @@ export default function BookAppointmentPage() {
   }, [doctors, preselectedDoctorId])
 
   const selectedSpecialty = SPECIALTIES.find(s => s.id === formData.specialty)
-  const availableDoctors = useMemo(
-    () => doctors.filter(d => d.specialization === formData.specialty),
-    [doctors, formData.specialty]
-  )
+  const availableDoctors = useMemo(() => {
+    if (!formData.specialty) return []
+    if (SERVICE_TYPES.has(formData.specialty)) return doctors
+    return doctors.filter((doctor) => doctor.specialization === formData.specialty)
+  }, [doctors, formData.specialty])
 const selectedDoctor = doctors.find(d => d.id === formData.doctorId)
 const selectedSpecialtyName = selectedSpecialty?.name || 'General Consultation'
   const displayDoctorName = (name: string) => {
