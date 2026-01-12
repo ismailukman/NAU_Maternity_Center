@@ -371,10 +371,12 @@ export default function HomePage() {
                 <div className="relative z-10 group">
                   <div className="absolute -top-4 -left-4 w-72 h-72 bg-maternal-primary rounded-full opacity-20 blur-3xl group-hover:opacity-30 transition-opacity"></div>
                   <div className="absolute -bottom-4 -right-4 w-72 h-72 bg-maternal-secondary rounded-full opacity-20 blur-3xl group-hover:opacity-30 transition-opacity"></div>
-                  <div className="relative bg-white rounded-3xl shadow-2xl p-10 transform hover:scale-105 transition-all duration-500 border border-maternal-light/20">
+                  <div className="relative bg-white rounded-3xl shadow-2xl p-10 pt-16 transform hover:scale-105 transition-all duration-500 border border-maternal-light/20">
                     <div className="text-center">
-                      <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-amber-300 via-amber-100 to-emerald-100 rounded-full mb-6 shadow-lg">
-                        <span className="text-4xl">🥇</span>
+                      <div className="absolute left-1/2 top-0 -translate-y-1/2 -translate-x-1/2">
+                        <div className="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-br from-amber-300 via-amber-100 to-emerald-100 rounded-full shadow-xl animate-float">
+                          <span className="text-5xl">🥇</span>
+                        </div>
                       </div>
                       <h3 className="text-3xl font-bold text-gray-900 mb-3">
                         5th Time Winner of Gold Medal in Maternity and Pediatric National Award
