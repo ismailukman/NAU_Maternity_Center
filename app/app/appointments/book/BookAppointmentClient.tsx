@@ -209,6 +209,38 @@ export default function BookAppointmentClient() {
     loadDoctorDetails()
   }, [formData.doctorId])
 
+  const displayDoctorName = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return ''
+    if (/^prof\.?\s*dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+    if (/^dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
+    return `Dr. ${trimmed}`
+  }
+
+  const parseTimeToMinutes = (value: string) => {
+    const trimmed = value.trim().toUpperCase()
+    const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/)
+    if (!match) return null
+    let hours = Number(match[1])
+    const minutes = Number(match[2] || '0')
+    const meridiem = match[3]
+    if (meridiem === 'PM' && hours < 12) hours += 12
+    if (meridiem === 'AM' && hours === 12) hours = 0
+    return hours * 60 + minutes
+  }
+
+  const parseWorkingHours = (value: string) => {
+    const [startRaw, endRaw] = value.split('-').map((part) => part.trim())
+    if (!startRaw || !endRaw) return null
+    const start = parseTimeToMinutes(startRaw)
+    const end = parseTimeToMinutes(endRaw)
+    if (start === null || end === null) return null
+    return { start, end }
+  }
+
+  const dayNameForDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', { weekday: 'long' })
+
   const selectedSpecialty = SPECIALTIES.find(s => s.id === formData.specialty)
   const availableDoctors = useMemo(() => {
     if (!formData.specialty) return []
@@ -242,37 +274,6 @@ export default function BookAppointmentClient() {
       return !bookedSlots.includes(`${formData.date}|${slot}`)
     })
   }, [formData.date, selectedDoctorDetails])
-  const displayDoctorName = (name: string) => {
-    const trimmed = name.trim()
-    if (!trimmed) return ''
-    if (/^prof\.?\s*dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
-    if (/^dr\.?\s*/i.test(trimmed)) return trimmed.replace(/\s+/g, ' ')
-    return `Dr. ${trimmed}`
-  }
-
-  const parseTimeToMinutes = (value: string) => {
-    const trimmed = value.trim().toUpperCase()
-    const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/)
-    if (!match) return null
-    let hours = Number(match[1])
-    const minutes = Number(match[2] || '0')
-    const meridiem = match[3]
-    if (meridiem === 'PM' && hours < 12) hours += 12
-    if (meridiem === 'AM' && hours === 12) hours = 0
-    return hours * 60 + minutes
-  }
-
-  const parseWorkingHours = (value: string) => {
-    const [startRaw, endRaw] = value.split('-').map((part) => part.trim())
-    if (!startRaw || !endRaw) return null
-    const start = parseTimeToMinutes(startRaw)
-    const end = parseTimeToMinutes(endRaw)
-    if (start === null || end === null) return null
-    return { start, end }
-  }
-
-  const dayNameForDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', { weekday: 'long' })
 
   const handleNext = () => {
     if (step === 1 && !formData.specialty) {
