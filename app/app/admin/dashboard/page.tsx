@@ -244,6 +244,22 @@ const parseSpecialties = (value: string | string[]) => {
     .filter(Boolean)
 }
 
+const normalizeSpecialty = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return 'General Consultation'
+  if (normalized.includes('pediatric')) return 'Pediatrics'
+  if (normalized.includes('obstetric') || normalized.includes('gynecolog') || normalized.includes('ob/gyn')) {
+    return 'Obstetrics & Gynecology'
+  }
+  return 'General Consultation'
+}
+
+const normalizeSpecialties = (values: string[]) => {
+  const mapped = values.map((value) => normalizeSpecialty(value))
+  const unique = Array.from(new Set(mapped))
+  return unique.length ? unique : ['General Consultation']
+}
+
 const buildAppointmentSpecialties = (value: string | string[]) => {
   const base = parseSpecialties(value)
   const withGeneral = base.includes('General Consultation')
@@ -919,11 +935,11 @@ export default function AdminDashboard() {
       const mapped = snapshot.docs.map((docSnapshot) => {
         const data = docSnapshot.data()
         const specializationValue = data.specialization || data.specialty || ''
-        const specialties = parseSpecialties(data.specialties || specializationValue)
+        const specialties = normalizeSpecialties(parseSpecialties(data.specialties || specializationValue))
         return {
           id: docSnapshot.id,
           name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
-          specialization: specializationValue,
+          specialization: normalizeSpecialty(specializationValue),
           specialties,
           qualification: data.qualification || '',
           experience: data.experience || '',
@@ -1188,8 +1204,8 @@ export default function AdminDashboard() {
 
   const handleSaveDoctor = async () => {
     try {
-      const specialties = parseSpecialties(doctorForm.specialization)
-      const primarySpecialty = specialties[0] || ''
+      const specialties = normalizeSpecialties(parseSpecialties(doctorForm.specialization))
+      const primarySpecialty = specialties[0] || 'General Consultation'
       const payload = {
         name: doctorForm.name.trim(),
         specialization: primarySpecialty,

@@ -41,6 +41,22 @@ const parseSpecialties = (value: string | string[]) => {
     .filter(Boolean)
 }
 
+const normalizeSpecialty = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return 'General Consultation'
+  if (normalized.includes('pediatric')) return 'Pediatrics'
+  if (normalized.includes('obstetric') || normalized.includes('gynecolog') || normalized.includes('ob/gyn')) {
+    return 'Obstetrics & Gynecology'
+  }
+  return 'General Consultation'
+}
+
+const normalizeSpecialties = (values: string[]) => {
+  const mapped = values.map((value) => normalizeSpecialty(value))
+  const unique = Array.from(new Set(mapped))
+  return unique.length ? unique : ['General Consultation']
+}
+
 type DoctorRecord = {
   id: string
   name: string
@@ -88,9 +104,9 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
 
         const data = snapshot.data()
         const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
-        const specialties = parseSpecialties(
+        const specialties = normalizeSpecialties(parseSpecialties(
           Array.isArray(data.specialties) ? data.specialties : data.specialization || data.specialty || ''
-        )
+        ))
         setDoctor({
           id: snapshot.id,
           name,
