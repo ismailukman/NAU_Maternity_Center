@@ -34,13 +34,14 @@ service cloud.firestore {
     // Patients collection - public read for doctor portal demo, admins can write
     match /patients/{patientId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
 
     // Appointments collection - admins can read/write, users can read their own
     match /appointments/{appointmentId} {
       allow read, write: if isAdmin();
-      allow create: if isAuthenticated();
+      allow create: if true;
       allow read: if isAuthenticated() && resource.data.patientId == request.auth.uid;
     }
 

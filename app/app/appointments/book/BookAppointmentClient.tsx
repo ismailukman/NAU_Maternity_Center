@@ -397,15 +397,6 @@ export default function BookAppointmentClient() {
         const patientSnapshot = await getDocs(existingPatientQuery)
         if (!patientSnapshot.empty) {
           patientId = patientSnapshot.docs[0].id
-          await updateDoc(doc(db, 'patients', patientId), {
-            firstName: patientFirstName,
-            lastName: patientLastName,
-            phone: formData.phone,
-            gender: formData.gender,
-            dateOfBirth: formData.dateOfBirth,
-            address: formData.address,
-            updatedAt: serverTimestamp(),
-          })
         }
       }
 
