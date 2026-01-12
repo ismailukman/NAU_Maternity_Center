@@ -32,6 +32,16 @@ const parseSpecialties = (value: string | string[]) => {
     .filter(Boolean)
 }
 
+const parseServices = (value: string | string[]) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 const normalizeSpecialty = (value: string) => {
   const normalized = value.trim().toLowerCase()
   if (!normalized) return 'General Consultation'
@@ -78,12 +88,14 @@ export default function DoctorsPage() {
               Array.isArray(data.specialties) ? data.specialties : data.specialization || data.specialty || ''
             ))
             const specialization = specialties[0] || 'General Consultation'
+            const services = parseServices(data.services || [])
             return {
               id: docSnapshot.id,
               name: name || `${docSnapshot.id}`,
               qualification: data.qualification || '',
               specialization,
               specialties: specialties.length ? specialties : [specialization],
+              services,
               rating: data.rating || 4.7,
               reviews: data.reviews || 0,
               experience: data.experience || '',
@@ -216,6 +228,11 @@ export default function DoctorsPage() {
                     <p className="text-sm text-gray-600 line-clamp-2">
                       {doctor.bio}
                     </p>
+                    {doctor.services?.length > 0 && (
+                      <p className="text-xs text-gray-500">
+                        Services: {doctor.services.join(', ')}
+                      </p>
+                    )}
 
                     {/* Actions */}
                     <div className="grid grid-cols-2 gap-2 pt-2">
@@ -251,6 +268,7 @@ const doctors = [
     qualification: 'MBBS, FWACS',
     specialization: 'Obstetrics & Gynecology',
     specialties: ['Obstetrics & Gynecology', 'General Consultation'],
+    services: ['Antenatal', 'Postnatal', 'Ultrasound', 'Vaccination'],
     rating: 4.9,
     reviews: 127,
     experience: 15,
@@ -265,6 +283,7 @@ const doctors = [
     qualification: 'MBBS, MRCOG',
     specialization: 'Pediatrics',
     specialties: ['Pediatrics', 'General Consultation'],
+    services: ['Postnatal', 'Vaccination'],
     rating: 4.8,
     reviews: 98,
     experience: 12,
@@ -279,6 +298,7 @@ const doctors = [
     qualification: 'MBBS, MD',
     specialization: 'Neonatology',
     specialties: ['Neonatology', 'General Consultation'],
+    services: ['Postnatal', 'Vaccination'],
     rating: 4.9,
     reviews: 156,
     experience: 18,
@@ -293,6 +313,7 @@ const doctors = [
     qualification: 'MBBS, FRCOG',
     specialization: 'OB/GYN',
     specialties: ['OB/GYN', 'General Consultation'],
+    services: ['Antenatal', 'Postnatal', 'Ultrasound'],
     rating: 4.7,
     reviews: 89,
     experience: 10,
@@ -307,6 +328,7 @@ const doctors = [
     qualification: 'RN, IBCLC',
     specialization: 'Lactation Consultant',
     specialties: ['Lactation Consultant', 'General Consultation'],
+    services: ['Postnatal'],
     rating: 5.0,
     reviews: 67,
     experience: 8,
@@ -321,6 +343,7 @@ const doctors = [
     qualification: 'MBBS, FMCOG',
     specialization: 'Maternal-Fetal Medicine',
     specialties: ['Maternal-Fetal Medicine', 'General Consultation'],
+    services: ['Antenatal', 'Ultrasound'],
     rating: 4.8,
     reviews: 112,
     experience: 16,

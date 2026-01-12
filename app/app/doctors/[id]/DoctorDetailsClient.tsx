@@ -62,6 +62,7 @@ type DoctorRecord = {
   name: string
   specialization: string
   specialties?: string[]
+  services?: string[]
   qualification?: string
   experience?: string | number
   rating?: number
@@ -107,11 +108,13 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
         const specialties = normalizeSpecialties(parseSpecialties(
           Array.isArray(data.specialties) ? data.specialties : data.specialization || data.specialty || ''
         ))
+        const services = Array.isArray(data.services) ? data.services : parseSpecialties(data.services || [])
         setDoctor({
           id: snapshot.id,
           name,
           specialization: specialties[0] || 'General Consultation',
           specialties: specialties.length ? specialties : ['General Consultation'],
+          services,
           qualification: data.qualification || '',
           experience: data.experience ?? '',
           rating: data.rating ?? 4.7,
@@ -251,6 +254,12 @@ export default function DoctorDetailsClient({ doctorId }: { doctorId: string }) 
                     <div className="flex items-center gap-2">
                       <Languages className="h-4 w-4 text-maternal-primary" />
                       <span>Languages: {doctor.languages.join(', ')}</span>
+                    </div>
+                  )}
+                  {doctor.services && doctor.services.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <BriefcaseMedical className="h-4 w-4 text-maternal-primary" />
+                      <span>Services: {doctor.services.join(', ')}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">

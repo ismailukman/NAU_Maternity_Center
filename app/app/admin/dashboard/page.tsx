@@ -163,6 +163,7 @@ interface DoctorProfile {
   name: string
   specialization: string
   specialties: string[]
+  services?: string[]
   qualification: string
   experience: string
   consultationDuration: number
@@ -258,6 +259,16 @@ const normalizeSpecialties = (values: string[]) => {
   const mapped = values.map((value) => normalizeSpecialty(value))
   const unique = Array.from(new Set(mapped))
   return unique.length ? unique : ['General Consultation']
+}
+
+const parseServices = (value: string | string[]) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 const buildAppointmentSpecialties = (value: string | string[]) => {
@@ -428,6 +439,7 @@ export default function AdminDashboard() {
   const [doctorForm, setDoctorForm] = useState({
     name: '',
     specialization: '',
+    services: '',
     qualification: '',
     experience: '',
     consultationDuration: 30,
@@ -953,6 +965,7 @@ export default function AdminDashboard() {
           availability: Array.isArray(data.availability) ? data.availability : [],
           bookedSlots: Array.isArray(data.bookedSlots) ? data.bookedSlots : [],
           gender: data.gender || '',
+          services: Array.isArray(data.services) ? data.services : parseServices(data.services || []),
         } as DoctorProfile
       })
       setDoctors(mapped)
@@ -1188,6 +1201,7 @@ export default function AdminDashboard() {
     setDoctorForm({
       name: doctor.name,
       specialization: doctor.specialties.length ? doctor.specialties.join(', ') : doctor.specialization,
+      services: doctor.services?.join(', ') || '',
       qualification: doctor.qualification,
       experience: doctor.experience,
       consultationDuration: doctor.consultationDuration,
@@ -1206,11 +1220,13 @@ export default function AdminDashboard() {
     try {
       const specialties = normalizeSpecialties(parseSpecialties(doctorForm.specialization))
       const primarySpecialty = specialties[0] || 'General Consultation'
+      const services = parseServices(doctorForm.services)
       const payload = {
         name: doctorForm.name.trim(),
         specialization: primarySpecialty,
         specialty: primarySpecialty,
         specialties,
+        services,
         qualification: doctorForm.qualification.trim(),
         experience: doctorForm.experience.trim(),
         consultationDuration: Number(doctorForm.consultationDuration) || 30,
@@ -2428,6 +2444,11 @@ export default function AdminDashboard() {
                         <p className="text-sm text-gray-600">
                           {(doctor.specialties.length ? doctor.specialties.join(' • ') : doctor.specialization) || 'General Consultation'} • {doctor.workingHours}
                         </p>
+                        {doctor.services && doctor.services.length > 0 && (
+                          <p className="text-xs text-gray-500">
+                            Services: {doctor.services.join(', ')}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-500">
                           ₦{doctor.fee.toLocaleString()} • {doctor.consultationDuration} min
                         </p>
@@ -2713,6 +2734,15 @@ export default function AdminDashboard() {
                   id="doctor-specialization"
                   value={doctorForm.specialization}
                   onChange={(e) => setDoctorForm({ ...doctorForm, specialization: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="doctor-services">Services</Label>
+                <Input
+                  id="doctor-services"
+                  value={doctorForm.services}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, services: e.target.value })}
+                  placeholder="Antenatal, Postnatal, Ultrasound, Vaccination"
                 />
               </div>
               <div>
