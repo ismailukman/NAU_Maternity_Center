@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Heart, Baby, Activity, Stethoscope, Calendar, Clock } from 'lucide-react'
 import { toast } from 'sonner'
-import { db } from '@/lib/firebase-config'
+import { auth, db } from '@/lib/firebase-config'
 import {
   addDoc,
   arrayUnion,
@@ -442,7 +442,7 @@ export default function BookAppointmentClient() {
         createdAt: serverTimestamp(),
       })
 
-      if (selectedDoctor) {
+      if (selectedDoctor && auth.currentUser) {
         await updateDoc(doc(db, 'doctors', selectedDoctor.id), {
           bookedSlots: arrayUnion(`${formData.date}|${formData.timeSlot}`),
         })
