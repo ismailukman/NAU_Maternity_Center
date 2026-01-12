@@ -46,6 +46,8 @@ const normalizeSpecialty = (value: string) => {
   const normalized = value.trim().toLowerCase()
   if (!normalized) return 'General Consultation'
   if (normalized.includes('pediatric')) return 'Pediatrics'
+  if (normalized.includes('oncolog')) return 'Oncology'
+  if (normalized.includes('radiolog')) return 'Radiology'
   if (normalized.includes('obstetric') || normalized.includes('gynecolog') || normalized.includes('ob/gyn')) {
     return 'Obstetrics & Gynecology'
   }
@@ -296,8 +298,8 @@ const doctors = [
     id: '3',
     name: 'Dr. Fatima Ibrahim',
     qualification: 'MBBS, MD',
-    specialization: 'Neonatology',
-    specialties: ['Neonatology', 'General Consultation'],
+    specialization: 'Oncology',
+    specialties: ['Oncology', 'General Consultation'],
     services: ['Postnatal', 'Vaccination'],
     rating: 4.9,
     reviews: 156,
@@ -341,8 +343,8 @@ const doctors = [
     id: '6',
     name: 'Dr. Usman Bello',
     qualification: 'MBBS, FMCOG',
-    specialization: 'Maternal-Fetal Medicine',
-    specialties: ['Maternal-Fetal Medicine', 'General Consultation'],
+    specialization: 'Radiology',
+    specialties: ['Radiology', 'General Consultation'],
     services: ['Antenatal', 'Ultrasound'],
     rating: 4.8,
     reviews: 112,

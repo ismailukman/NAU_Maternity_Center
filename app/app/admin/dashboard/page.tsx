@@ -249,6 +249,8 @@ const normalizeSpecialty = (value: string) => {
   const normalized = value.trim().toLowerCase()
   if (!normalized) return 'General Consultation'
   if (normalized.includes('pediatric')) return 'Pediatrics'
+  if (normalized.includes('oncolog')) return 'Oncology'
+  if (normalized.includes('radiolog')) return 'Radiology'
   if (normalized.includes('obstetric') || normalized.includes('gynecolog') || normalized.includes('ob/gyn')) {
     return 'Obstetrics & Gynecology'
   }
@@ -1182,6 +1184,7 @@ export default function AdminDashboard() {
     setDoctorForm({
       name: '',
       specialization: '',
+      services: '',
       qualification: '',
       experience: '',
       consultationDuration: 30,
