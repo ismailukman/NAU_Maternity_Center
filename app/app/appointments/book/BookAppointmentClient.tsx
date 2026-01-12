@@ -17,6 +17,7 @@ import {
   arrayUnion,
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -96,6 +97,12 @@ export default function BookAppointmentClient() {
     symptoms: '',
   })
   const [doctors, setDoctors] = useState(MOCK_DOCTORS)
+  const [selectedDoctorDetails, setSelectedDoctorDetails] = useState<{
+    workingHours?: string
+    availability?: string[]
+    bookedSlots?: string[]
+    specialties?: string[]
+  } | null>(null)
   const preselectedDoctorId = searchParams?.get('doctor') || ''
 
   useEffect(() => {
@@ -158,6 +165,50 @@ export default function BookAppointmentClient() {
     setStep((currentStep) => (currentStep < 3 ? 3 : currentStep))
   }, [doctors, preselectedDoctorId])
 
+  useEffect(() => {
+    const loadDoctorDetails = async () => {
+      if (!formData.doctorId) {
+        setSelectedDoctorDetails(null)
+        return
+      }
+      try {
+        const snapshot = await getDoc(doc(db, 'doctors', formData.doctorId))
+        if (!snapshot.exists()) {
+          setSelectedDoctorDetails(null)
+          return
+        }
+        const data = snapshot.data()
+        const rawSpecialties = Array.isArray(data?.specialties)
+          ? data.specialties
+          : data?.specialization
+            ? [data.specialization]
+            : []
+        const specialties = rawSpecialties
+          .map((item: string) => String(item).trim())
+          .filter(Boolean)
+        setSelectedDoctorDetails({
+          workingHours: data?.workingHours,
+          availability: Array.isArray(data?.availability) ? data.availability : [],
+          bookedSlots: Array.isArray(data?.bookedSlots) ? data.bookedSlots : [],
+          specialties,
+        })
+        if (specialties.length === 1) {
+          setFormData((prev) => ({ ...prev, appointmentType: specialties[0] }))
+        } else if (
+          specialties.length > 1 &&
+          formData.appointmentType &&
+          !specialties.includes(formData.appointmentType)
+        ) {
+          setFormData((prev) => ({ ...prev, appointmentType: '' }))
+        }
+      } catch (error) {
+        console.error('Failed to load doctor details:', error)
+        setSelectedDoctorDetails(null)
+      }
+    }
+    loadDoctorDetails()
+  }, [formData.doctorId])
+
   const selectedSpecialty = SPECIALTIES.find(s => s.id === formData.specialty)
   const availableDoctors = useMemo(() => {
     if (!formData.specialty) return []
@@ -172,6 +223,25 @@ export default function BookAppointmentClient() {
   const doctorSpecialtyOptions = selectedDoctor?.specialties?.length
     ? selectedDoctor.specialties
     : []
+  const availableTimeSlots = useMemo(() => {
+    if (!formData.date || !selectedDoctorDetails) return TIME_SLOTS
+    const availability = selectedDoctorDetails.availability || []
+    const dayName = dayNameForDate(formData.date)
+    if (
+      availability.length > 0 &&
+      !availability.some((day) => day.toLowerCase() === dayName.toLowerCase())
+    ) {
+      return []
+    }
+    const workingRange = parseWorkingHours(selectedDoctorDetails.workingHours || '09:00 AM - 05:00 PM')
+    const bookedSlots = selectedDoctorDetails.bookedSlots || []
+    return TIME_SLOTS.filter((slot) => {
+      const slotMinutes = parseTimeToMinutes(slot)
+      if (!workingRange || slotMinutes === null) return true
+      if (slotMinutes < workingRange.start || slotMinutes > workingRange.end) return false
+      return !bookedSlots.includes(`${formData.date}|${slot}`)
+    })
+  }, [formData.date, selectedDoctorDetails])
   const displayDoctorName = (name: string) => {
     const trimmed = name.trim()
     if (!trimmed) return ''
@@ -217,6 +287,10 @@ export default function BookAppointmentClient() {
       toast.error('Please select date and time')
       return
     }
+    if (step === 3 && selectedDoctor && formData.date && availableTimeSlots.length === 0) {
+      toast.error(`${displayDoctorName(selectedDoctor.name)} is not available on ${dayNameForDate(formData.date)}.`)
+      return
+    }
     if (
       step === 3 &&
       selectedDoctor &&
@@ -246,13 +320,9 @@ export default function BookAppointmentClient() {
     setSubmitting(true)
     try {
       if (selectedDoctor) {
-        const doctorSnapshot = await getDocs(
-          query(collection(db, 'doctors'), where('__name__', '==', selectedDoctor.id))
+        const workingRange = parseWorkingHours(
+          selectedDoctorDetails?.workingHours || '09:00 AM - 05:00 PM'
         )
-        const doctorData = doctorSnapshot.docs[0]?.data()
-        const workingHours = doctorData?.workingHours || '09:00 AM - 05:00 PM'
-        const availability = Array.isArray(doctorData?.availability) ? doctorData.availability : []
-        const workingRange = parseWorkingHours(workingHours)
         const slotMinutes = parseTimeToMinutes(formData.timeSlot)
 
         if (!workingRange || slotMinutes === null) {
@@ -262,11 +332,12 @@ export default function BookAppointmentClient() {
         }
 
         const dayName = dayNameForDate(formData.date)
+        const availability = selectedDoctorDetails?.availability || []
         if (
           availability.length > 0 &&
           !availability.some((day) => day.toLowerCase() === dayName.toLowerCase())
         ) {
-          toast.error(`Dr. ${selectedDoctor.name} is not available on ${dayName}.`)
+          toast.error(`${displayDoctorName(selectedDoctor.name)} is not available on ${dayName}.`)
           setSubmitting(false)
           return
         }
@@ -353,9 +424,12 @@ export default function BookAppointmentClient() {
 
       const appointmentNumber = `APT-${formData.date.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
 
+      const appointmentTypeValue =
+        formData.appointmentType || selectedDoctor?.specialties?.[0] || selectedSpecialtyName
+
       await addDoc(collection(db, 'appointments'), {
         appointmentNumber,
-        appointmentType: formData.appointmentType || selectedSpecialtyName,
+        appointmentType: appointmentTypeValue,
         appointmentDate: formData.date,
         appointmentTime: formData.timeSlot,
         status: 'SCHEDULED',
@@ -479,7 +553,14 @@ export default function BookAppointmentClient() {
                     {SPECIALTIES.map((specialty) => (
                       <button
                         key={specialty.id}
-                        onClick={() => setFormData({ ...formData, specialty: specialty.id })}
+                        onClick={() => setFormData({
+                          ...formData,
+                          specialty: specialty.id,
+                          doctorId: '',
+                          appointmentType: '',
+                          date: '',
+                          timeSlot: '',
+                        })}
                         className={`p-6 border-2 rounded-lg transition-all text-left hover:shadow-lg ${
                           formData.specialty === specialty.id
                             ? 'border-maternal-primary bg-maternal-lighter'
@@ -534,7 +615,7 @@ export default function BookAppointmentClient() {
                     {availableDoctors.map((doctor) => (
                       <button
                         key={doctor.id}
-                        onClick={() => setFormData({ ...formData, doctorId: doctor.id })}
+                        onClick={() => setFormData({ ...formData, doctorId: doctor.id, appointmentType: '' })}
                         className={`w-full p-6 border-2 rounded-lg transition-all text-left hover:shadow-lg ${
                           formData.doctorId === doctor.id
                             ? 'border-maternal-primary bg-maternal-lighter'
@@ -604,21 +685,27 @@ export default function BookAppointmentClient() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Available Time Slots
                       </label>
-                      <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                        {TIME_SLOTS.map((slot) => (
-                          <button
-                            key={slot}
-                            onClick={() => setFormData({ ...formData, timeSlot: slot })}
-                            className={`p-2 border-2 rounded-lg text-sm font-semibold transition-all ${
-                              formData.timeSlot === slot
-                                ? 'border-maternal-primary bg-maternal-lighter text-maternal-primary'
-                                : 'border-gray-200 hover:border-maternal-light'
-                            }`}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
+                      {selectedDoctor && availableTimeSlots.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-600">
+                          {displayDoctorName(selectedDoctor.name)} is not available on this date.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                          {availableTimeSlots.map((slot) => (
+                            <button
+                              key={slot}
+                              onClick={() => setFormData({ ...formData, timeSlot: slot })}
+                              className={`p-2 border-2 rounded-lg text-sm font-semibold transition-all ${
+                                formData.timeSlot === slot
+                                  ? 'border-maternal-primary bg-maternal-lighter text-maternal-primary'
+                                  : 'border-gray-200 hover:border-maternal-light'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {selectedDoctor && doctorSpecialtyOptions.length > 1 && (
                       <div className="md:col-span-2">
