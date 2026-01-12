@@ -368,34 +368,30 @@ export default function HomePage() {
               </div>
 
               <div className="relative hidden md:block animate-fade-in">
-                <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-5 py-2 text-sm font-semibold text-amber-700 shadow-sm">
-                  <span className="text-lg">🥇</span>
-                  <span className="bg-gradient-to-r from-amber-600 to-emerald-600 bg-clip-text text-transparent">
-                    5th Time Winner of Gold Medal in Maternity and Pediatric National Award
-                  </span>
-                </div>
                 <div className="relative z-10 group">
                   <div className="absolute -top-4 -left-4 w-72 h-72 bg-maternal-primary rounded-full opacity-20 blur-3xl group-hover:opacity-30 transition-opacity"></div>
                   <div className="absolute -bottom-4 -right-4 w-72 h-72 bg-maternal-secondary rounded-full opacity-20 blur-3xl group-hover:opacity-30 transition-opacity"></div>
                   <div className="relative bg-white rounded-3xl shadow-2xl p-10 transform hover:scale-105 transition-all duration-500 border border-maternal-light/20">
                     <div className="text-center">
-                      <div className="inline-flex items-center justify-center w-28 h-28 bg-gradient-to-br from-maternal-primary to-maternal-secondary rounded-full mb-6 shadow-lg animate-pulse-slow">
-                        <Heart className="h-14 w-14 text-white animate-float" fill="white" />
+                      <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-amber-300 via-amber-100 to-emerald-100 rounded-full mb-6 shadow-lg">
+                        <span className="text-4xl">🥇</span>
                       </div>
                       <h3 className="text-3xl font-bold text-gray-900 mb-3">
-                        Your Journey Starts Here
+                        5th Time Winner of Gold Medal in Maternity and Pediatric National Award
                       </h3>
                       <p className="text-gray-600 mb-8 text-lg">
-                        Comprehensive care from pregnancy to motherhood
+                        Recognized excellence in maternal and pediatric care outcomes.
                       </p>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gradient-to-br from-maternal-lighter to-pink-100 p-6 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-300 group/card">
-                          <Baby className="h-10 w-10 text-maternal-primary mb-3 mx-auto group-hover/card:scale-110 transition-transform" />
-                          <p className="text-sm font-bold text-gray-900">Prenatal Care</p>
+                        <div className="bg-gradient-to-br from-emerald-50 to-amber-50 p-6 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-300 group/card">
+                          <Heart className="h-10 w-10 text-emerald-600 mb-3 mx-auto group-hover/card:scale-110 transition-transform" />
+                          <p className="text-sm font-bold text-gray-900">Maternity Care</p>
+                          <p className="text-xs text-gray-600">Award-Winning</p>
                         </div>
-                        <div className="bg-gradient-to-br from-purple-100 to-maternal-lighter p-6 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-300 group/card">
-                          <Heart className="h-10 w-10 text-maternal-secondary mb-3 mx-auto group-hover/card:scale-110 transition-transform" />
-                          <p className="text-sm font-bold text-gray-900">Postnatal Care</p>
+                        <div className="bg-gradient-to-br from-amber-50 to-rose-50 p-6 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-300 group/card">
+                          <Baby className="h-10 w-10 text-rose-500 mb-3 mx-auto group-hover/card:scale-110 transition-transform" />
+                          <p className="text-sm font-bold text-gray-900">Pediatric Care</p>
+                          <p className="text-xs text-gray-600">Gold Medal</p>
                         </div>
                       </div>
                     </div>
