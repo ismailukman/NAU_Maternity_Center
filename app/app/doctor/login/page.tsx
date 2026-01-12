@@ -102,10 +102,10 @@ export default function DoctorLoginPage() {
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button type="submit" className="maternal-gradient w-full">
-                  Doctor Loging
+                  Doctor Login
                 </Button>
                 <Button type="button" variant="outline" onClick={handleDemoFill} className="w-full">
-                  Use Demo Login
+                  Use Demo
                 </Button>
               </div>
               <p className="text-sm text-gray-500">
