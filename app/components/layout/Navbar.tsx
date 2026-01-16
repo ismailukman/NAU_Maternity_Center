@@ -47,8 +47,8 @@ export default function Navbar() {
             <div
               className={`transition-all duration-700 ease-out ${
                 isScrolled
-                  ? 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24'
-                  : 'w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-56 lg:h-56'
+                  ? 'w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14'
+                  : 'w-16 h-16 sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-48 lg:h-48'
               }`}
               style={{
                 transform: isScrolled ? 'translateY(0)' : 'translateY(20%)',

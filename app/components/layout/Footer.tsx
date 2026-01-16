@@ -74,7 +74,7 @@ export default function Footer() {
             <ul className="space-y-2 sm:space-y-3 text-xs sm:text-sm">
               <li className="flex items-start space-x-2">
                 <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-maternal-primary flex-shrink-0 mt-0.5" />
-                <span>123 Care Street, Medical District, Your City</span>
+                <span>123 Ohi Market Road, Ihima, Okehi LGA, Kogi State, Nigeria</span>
               </li>
               <li className="flex items-center space-x-2">
                 <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-maternal-primary flex-shrink-0" />
